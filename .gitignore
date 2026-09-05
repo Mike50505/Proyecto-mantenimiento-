@@ -1,0 +1,11 @@
+data/*.db
+data/*.db-shm
+data/*.db-wal
+node_modules/
+.env
+*.xlsx
+*.xls
+*.xlsm
+~$*
+requisitos.txt
+referencias visuales/

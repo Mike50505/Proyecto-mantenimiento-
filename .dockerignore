@@ -1,0 +1,14 @@
+.git
+.gitignore
+.agents
+.codex
+data
+node_modules
+npm-debug.log
+*.xlsx
+*.xls
+*.xlsm
+*.txt
+Dockerfile*
+compose*.yaml
+README.md

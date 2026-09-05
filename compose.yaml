@@ -1,0 +1,29 @@
+services:
+  mantenimiento:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mesa-mantenimiento:latest
+    container_name: mesa-mantenimiento
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      TZ: America/Mexico_City
+    ports:
+      - "3000:3000"
+    volumes:
+      - mantenimiento_data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mantenimiento_data:
+    name: mesa_mantenimiento_data
