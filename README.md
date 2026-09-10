@@ -2,6 +2,12 @@
 
 Primera versión de la aplicación web para administrar mantenimiento en Planta Ramos.
 
+**Estado actualizado:** consulta [la entrega verificada del 8 de septiembre](docs/entrega-2026-09-08.md) para cambios, pruebas, URLs y pendientes. Este documento de entrega prevalece sobre las descripciones históricas de alcance de este README.
+
+La interfaz actual usa recursos locales, navegación adaptable y pestañas de OT. Terminar pasa a **Pendiente de validación**; validar pasa a **Completada**. Las salidas y devoluciones se confirman desde sus acciones y conservan el historial. Las semillas requieren `MESA_DEMO=1`; no activar esa variable en operación.
+
+Respaldo manual: `node scripts/backup.cjs`. Comprobación de migración sobre una copia: `node scripts/check-upgrade.cjs <archivo.db>`. Revisión de navegador con datos sintéticos: `node scripts/ui-review.cjs` (requiere Chrome).
+
 ## Requisitos
 
 - Node.js 22.5 o superior (se recomienda Node.js 24).
@@ -34,6 +40,20 @@ Abrir `http://localhost:3000` en el navegador. Para acceder desde otro dispositi
 - Datos ficticios mínimos para demostrar el funcionamiento.
 - Inicio de sesión mediante usuario y contraseña.
 - Administración de usuarios y asignación de roles.
+- Inventario de insumos con código, unidad, existencia, mínimos y máximos.
+- Registro de entradas, salidas, ajustes y alerta de reabastecimiento.
+- Flujo vertical de OT con inicio, sesiones de trabajo, término, validación autenticada, control de versión e idempotencia.
+- Registro de paros independientes y bitácora de auditoría.
+
+### Documentación del proyecto
+
+- [Matriz de trazabilidad](docs/requirements-traceability.md)
+- [Decisiones de arquitectura y producto](docs/decisions.md)
+- [Inspección de fuentes](docs/source-inspection.md)
+- [Contratos de API](docs/api.md)
+- [Continuidad del desarrollo](CONTINUITY.md)
+
+Las pruebas se ejecutan con `npm test`. La base actual contiene una semilla demostrativa separada; los libros Excel y el DOCX se mantienen como fuentes de conciliación y no se cargan automáticamente.
 
 ### Roles
 

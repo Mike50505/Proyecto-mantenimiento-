@@ -3,6 +3,9 @@ data/*.db-shm
 data/*.db-wal
 node_modules/
 .env
+.agents/
+backups/
+data/*.log
 *.xlsx
 *.xls
 *.xlsm

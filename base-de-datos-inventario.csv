@@ -1,0 +1,4 @@
+﻿"Código","Descripción","Categoría","Unidad","Existencia","StockMínimo","StockMáximo","CostoUnitario","Ubicación"
+"MAT-DEMO-002","Aceite hidráulico ISO 68","Lubricantes","litro","8","5","20","145","Anaquel B-02"
+"MAT-DEMO-003","Luminaria LED industrial","Eléctrico","pieza","2","2","8","450","Anaquel C-01"
+"MAT-DEMO-001","Tornillo hexagonal 8 mm","Tornillería","pieza","24","10","50","3.5","Anaquel A-01"

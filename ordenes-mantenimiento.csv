@@ -1,0 +1,5 @@
+﻿"Folio","Fecha solicitud","Solicitante","Prioridad","Clasificación","Especialidad","Activo","Falla reportada","Acciones","Técnico","Inicio","Fin","Horas hombre","Material utilizado","Costo materiales","Estado"
+"OT-2026-004","2026-09-03T13:40","Operador de ejemplo ","Baja","Mantenimiento Correctivo","","Cortadora de demostración","si","","","","","0","","0","Abierta"
+"OT-2026-003","2026-09-03T12:43","Operador de ejemplo ","Alta","Mantenimiento Preventivo","Soldadura","","DAÑO EN PLANTILLA 611711-01","","Cristian López ","","","0","","0","Abierta"
+"OT-2026-002","2026-09-02T10:00","Operador de ejemplo ","Media","Proyecto Kaizen","Eléctrico","Iluminación nave principal","Iluminación insuficiente en estación","Instalación de luminaria de prueba","Cristian López ","2026-09-02T10:30","","2","Luminaria LED de demostración","450","Completada"
+"OT-2026-001","2026-09-01T08:15","Operador de ejemplo ","Alta","Mantenimiento Correctivo","Mecánica","Montacargas de demostración","Fuga hidráulica detectada durante inspección","Diagnóstico inicial y aislamiento del equipo","Orlando Martínez ","2026-09-01T08:30","","1.5","Material de demostración","320","En proceso"

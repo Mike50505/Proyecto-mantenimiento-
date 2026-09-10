@@ -9,6 +9,8 @@ WORKDIR /app
 
 COPY --chown=node:node package.json ./
 COPY --chown=node:node server.js ./
+COPY --chown=node:node lib ./lib
+COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node public ./public
 
 RUN mkdir -p /app/data && chown node:node /app/data

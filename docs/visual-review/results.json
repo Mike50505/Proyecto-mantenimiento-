@@ -1,0 +1,190 @@
+{
+  "screens": [
+    {
+      "width": 390,
+      "view": "dashboard",
+      "viewport": 390,
+      "scroll": 375,
+      "body": 375,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 390,
+      "view": "orders",
+      "viewport": 390,
+      "scroll": 390,
+      "body": 390,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 390,
+      "view": "assets",
+      "viewport": 390,
+      "scroll": 390,
+      "body": 390,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 390,
+      "view": "inventory",
+      "viewport": 390,
+      "scroll": 375,
+      "body": 375,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 390,
+      "view": "preventives",
+      "viewport": 390,
+      "scroll": 390,
+      "body": 390,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 390,
+      "view": "users",
+      "viewport": 390,
+      "scroll": 375,
+      "body": 375,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 768,
+      "view": "dashboard",
+      "viewport": 768,
+      "scroll": 753,
+      "body": 753,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 768,
+      "view": "orders",
+      "viewport": 768,
+      "scroll": 768,
+      "body": 768,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 768,
+      "view": "assets",
+      "viewport": 768,
+      "scroll": 768,
+      "body": 768,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 768,
+      "view": "inventory",
+      "viewport": 768,
+      "scroll": 768,
+      "body": 768,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 768,
+      "view": "preventives",
+      "viewport": 768,
+      "scroll": 768,
+      "body": 768,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 768,
+      "view": "users",
+      "viewport": 768,
+      "scroll": 753,
+      "body": 753,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 1440,
+      "view": "dashboard",
+      "viewport": 1440,
+      "scroll": 1425,
+      "body": 1425,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 1440,
+      "view": "orders",
+      "viewport": 1440,
+      "scroll": 1440,
+      "body": 1440,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 1440,
+      "view": "assets",
+      "viewport": 1440,
+      "scroll": 1440,
+      "body": 1440,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 1440,
+      "view": "inventory",
+      "viewport": 1440,
+      "scroll": 1440,
+      "body": 1440,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 1440,
+      "view": "preventives",
+      "viewport": 1440,
+      "scroll": 1440,
+      "body": 1440,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    },
+    {
+      "width": 1440,
+      "view": "users",
+      "viewport": 1440,
+      "scroll": 1440,
+      "body": 1440,
+      "error": false,
+      "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(245, 245, 247)"
+    }
+  ],
+  "zoom": {
+    "zoom": "2",
+    "scroll": 1425,
+    "width": 1440
+  },
+  "operatorRequestPersisted": true
+}

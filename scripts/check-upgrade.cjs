@@ -1,0 +1,14 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const {DatabaseSync}=require('node:sqlite');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'mesa-upgrade-'));
+const copy=path.join(dir,'copy.db');fs.copyFileSync(path.resolve(process.argv[2]),copy);
+process.env.DB_PATH=copy;
+let db=new DatabaseSync(copy);
+const tables=['users','assets','work_orders','inventory_items','inventory_movements','maintenance_materials'].filter(t=>db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(t));
+const counts=Object.fromEntries(tables.map(t=>[t,db.prepare(`SELECT COUNT(*) n FROM ${t}`).get().n]));db.close();
+db=require('../server').db;
+for(const table of tables)if(db.prepare(`SELECT COUNT(*) n FROM ${table}`).get().n!==counts[table])throw Error('Cambió la cantidad de '+table);
+if(db.prepare('PRAGMA integrity_check').get().integrity_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Falló la integridad');
+require('../lib/business-migrations')(db);
+db.close();console.log(JSON.stringify({upgrade:'ok',counts,repeatedMigration:'ok'}));fs.rmSync(dir,{recursive:true,force:true});
