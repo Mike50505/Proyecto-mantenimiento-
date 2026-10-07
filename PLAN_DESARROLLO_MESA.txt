@@ -1,0 +1,134 @@
+PLAN DE DESARROLLO — MANTENIMIENTO MESA
+Actualización 24/09: Paso 2 sigue EN CURSO. La migración 0005 añade propuestas
+de equivalencia de códigos con origen, revisión y auditoría; 34 pruebas pasan.
+Pendiente para cerrar: historial de hallazgos, turnos en flujos operativos, datos
+oficiales de planta y revisión visual en dispositivos.
+Actualización posterior 24/09: expediente de activos ampliado con preventivos,
+paros, materiales netos y lecturas; 37 pruebas pasan. Faltan hallazgos autónomos,
+turnos operativos, datos oficiales y validación visual.
+Inicio: 24 de septiembre de 2026
+Fuente: Requerimientos_Mantenimiento_MESA.docx, requisitos.txt,
+Prompt_maestro_Mantenimiento_MESA.md y revisión de django-version/.
+Registro de avance y evidencia: AVANCE_MANTENIMIENTO_MESA.txt.
+
+REGLA DE CIERRE DE CADA PASO
+Un paso pasa a COMPLETADO solo con código, migraciones si aplican, pruebas de
+reglas críticas, recorrido de interfaz y actualización del TXT de seguimiento.
+La aceptación de planta se registra aparte. No importar libros históricos ni
+activar operación productiva sin conciliar sus datos y decisiones D-01 a D-12.
+
+PASO 1 — Flujo completo de OT y tiempo (P0; RF-07 a RF-19, CA-01 a CA-06)
+Estado: EN CURSO.
+Implementar participantes, sesiones Iniciar/Pausar/Terminar, captura manual,
+corrección auditada, validaciones de cierre y cancelación. Probar cruces de día,
+dos técnicos, pausas, solapamientos, permisos, conflictos y doble envío.
+Avance 24/09: colaboradores, sesiones, captura manual, corrección auditada,
+cancelación/reapertura, confirmación de paro y consumo conservado. Se probaron
+folios y reintentos simultáneos con la misma clave, además de sesiones
+concurrentes del mismo técnico en dos OT. Falta recorrido en dispositivos reales
+y validar la política de liberación con planta.
+
+PASO 2 — Catálogos y expediente de activos (P0; RF-02 a RF-06, RF-09 a RF-11)
+Estado: EN CURSO.
+Administrar áreas, líneas, turnos, prioridades, clasificaciones y especialidades
+sin perder historial. Resolver alias/equivalencias y mostrar historial integral.
+Pedir aprobación de D-02, D-03 y D-11 para datos oficiales.
+Avance 24/09: migración 0003 y pantalla de catálogos con activación/desactivación;
+se incorporó Seguimiento. Migración 0004 agregó línea y ubicación detallada a
+la ficha de activo. Después se añadieron equivalencias revisables y expediente
+con preventivos, paros y materiales. Faltan turnos, hallazgos y datos oficiales.
+
+PASO 3 — Preventivos y calendario (P0; RF-21 a RF-25, RF-28, CA-07 a CA-12)
+Estado: EN CURSO.
+Unificar programación desde OT, activo y calendario; completar aplicabilidad,
+plantillas, vistas y cumplimiento con fecha base. Validar D-04 y D-06.
+Avance 24/09: la ficha de activo abre el formulario preventivo existente con el
+activo seleccionado. Órdenes y calendario general usan la misma ocurrencia/OT;
+vistas semanal, mensual, agenda y anual con estados P/T/D/V y evento R. La
+aplicabilidad por tarea requiere revisión Interna, Externa o No aplica antes de
+crear vencimientos nuevos; migración 0006 aplicada y 44 pruebas aprobadas.
+El comando repetible de planificación usa fechas base por tarea y ocurrencias
+persistidas; existe perfil Docker opcional, desactivado hasta confirmar D-06.
+47 pruebas aprobadas. Faltan contenido oficial de plantillas, frecuencias
+definitivas, activación operativa, reglas por horas/mixtas y validación visual.
+
+PASO 4 — Importación conciliada (P0; RF-54, CA-20)
+Estado: EN CURSO.
+Crear lotes con procedencia por archivo/hoja/fila, errores, equivalencias,
+previsualización, confirmación transaccional y repetición segura. La carga de
+datos reales espera clasificación y corte D-12.
+Avance 28/09: los lotes de vista previa quedan identificados por SHA-256,
+pueden consultarse después y descartarse con motivo y auditoría. Repetir el
+mismo archivo devuelve el mismo lote; no se escriben activos, OT ni inventario.
+La pantalla muestra historial, conflictos visibles y todas las filas de origen
+por hoja, paginadas. La migración 0008 conserva valores y fórmulas guardadas.
+La migración 0009 añade decisiones auditadas por fila: pendiente, excluida o
+propuesta de vínculo con un activo existente. CALENDARIO reconoce códigos desde
+B13. La conciliación de códigos agrupa filas de esas tres hojas, señala
+repeticiones dentro de una hoja y distingue códigos vigentes de equivalencias
+aprobadas en Django. Una propuesta no aprueba ni modifica el activo. Faltan mapeo tipado y validado,
+conciliación completa, aprobación, confirmación transaccional e importación
+operativa. D-02/D-04/D-09/D-10/D-12
+siguen pendientes con planta.
+El mapeo provisional por hoja ya identifica campos de activos, almacén, OT
+históricas y Kaizen en la consulta de filas; se documenta en IMPORT_REVIEW.md.
+Las fechas seriales con formato reconocido ya muestran una interpretación
+separada del valor original; puntos de revisión, estados y avance siguen como
+valores originales hasta acordar reglas. Faltan validación por fuente, referencias entre
+fuentes, conciliación completa y confirmación transaccional.
+La migración 0010 conserva tipos de celda y sistema de fechas 1900/1904; los
+errores de Excel aparecen como incidencias. Las fechas textuales aún requieren
+reglas por fuente. La lectura de prueba de los tres libros no creó lotes.
+La pantalla también coteja MANTENIMIENTOS.B → MAQUINAS.A, PM.A →
+MANTENIMIENTOS.A y PM.C → ALMACEN.A, mostrando referencias faltantes o ambiguas
+sin generar transacciones. El panel añade claves repetidas dentro de cada hoja
+(IDs, códigos de almacén, folios y códigos de candidato), sin confundir códigos
+iguales en hojas espejo con duplicados de la misma hoja. El cotejo real encontró
+seis códigos repetidos en CALENDARIO, TRANSFORMADOR ENERGIA duplicado en las dos
+hojas de activos y dos referencias históricas incompletas. Ver IMPORT_REVIEW.md.
+
+PASO 5 — Documentos, reportes y tablero operativo (P0; RF-45, RF-48 a RF-53)
+Estado: EN CURSO.
+Entregas 28/09: XLSX tipado de OT con filtros/permisos, activos con búsqueda, inventario activo, programa preventivo, OT del tablero con corte de fechas y consulta de auditoría filtrable/exportable; accesos del tablero a activos/OT/preventivos/inventario; PDF server-side versionado e inmutable de OT con snapshot, checklist preventivo/autónomo, hash y auditoría; alertas operativas persistentes con nota de atención, responsable, auditoría y cierre al desaparecer su causa. Pendientes: registro oficial de documentos, reportes restantes, validar reglas/severidades de alertas y aceptación visual/permisos (CA-17/19).
+XLSX tipado, PDF versionado de OT, control documental, alertas y filtros con
+el mismo corte. Verificar permisos, fórmulas y legibilidad (CA-17, CA-19).
+
+PASO 6 — Operación y aceptación del piloto (P0; RF-01, RF-55, RF-56, RNF)
+Estado: PENDIENTE.
+HTTPS, respaldos automáticos externos, restauración, instalación limpia,
+mediciones, pruebas móvil/tablet/teclado y manuales. Acordar servidor, acceso,
+roles, retención y acta con planta/TI (D-01, D-08, D-12; CA-21 a CA-24).
+
+PASO 7 — Alcance P1 operativo
+Estado: PENDIENTE.
+Autónomos y hallazgos (RF-30 a RF-34), recurrencias y horómetro mixto (RF-26,
+RF-27, RF-29), inventario/costos completos (RF-35 a RF-40) y Kaizen (RF-41 a
+RF-44). Resolver D-05, D-06, D-09 y D-10; probar CA-10 a CA-16.
+
+PASO 8 — Alcance P1 gerencial y cierre
+Estado: PENDIENTE.
+Dashboard gerencial, disponibilidad/MTBF/MTTR y modo de junta (RF-46, RF-47,
+RF-51). Acordar D-07, conciliar cifras por período y cerrar CA-17/18/24.
+
+Orden práctico: cada paso se divide en entregas pequeñas; los módulos P1 ya
+existentes se conservan y se endurecen al llegar a su paso. Tras cada entrega,
+anotar comandos y resultados reales en AVANCE_MANTENIMIENTO_MESA.txt.
+
+Actualizacion 28/09 RF-52: historial con filtros y XLSX desplegado; cobertura ampliada a cambios de cuentas, activos, inventario, horometro, plantillas y checklist preventivo, con alcance de area. Sigue pendiente auditar rutas restantes y acordar retencion; el Paso 5 continua con registro documental y aceptacion CA-17/19.
+
+Actualizacion 28/09 RF-49: se agrega exportacion XLSX del historial de paros, con relaciones de OT, cierre, fechas y alcance por area. Continuan pendientes otros reportes, registro oficial documental y aceptacion CA-17/19; no se calculan indicadores de disponibilidad sin reglas acordadas.
+
+Actualizacion 28/09 CA-17: estado y busqueda de la bandeja de OT se transmiten ahora a XLSX y CSV; criterio de busqueda alineado entre pantalla y servidor. Smoke de lista/CSV/XLSX con los mismos parametros correcto. La conciliacion con datos y aceptacion CA-17 siguen pendientes por ausencia de datos operativos aprobados.
+
+Actualizacion 01/10: Paso 4 incorpora prevalidacion tecnica de lotes; la importacion operativa sigue bloqueada hasta mapeos y aprobaciones. El endpoint y la interfaz de XLSX de alertas quedaron desplegados en el servicio local. Respaldo restaurado en base temporal, Django check limpio, sin migraciones pendientes, smoke autenticado del XLSX 200 con MIME/firma correctos, `/api/health` 200 y contenedores saludables. Sigue pendiente ejecutar la prueba focalizada y validar contenido/permisos con usuarios. Los libros de ejemplo no se importaron.
+Iteracion 01/10: pruebas focalizadas de prevalidacion y exportacion de alertas 2/2 aprobadas en contenedor temporal; cobertura de fila excluida, bloqueo operativo, filtro por area y denegacion a Solicitante. Estimacion global P0/P1: 63%, sin cambio en esta iteracion de calidad. Siguiente: mapeo tipado y validacion tecnica que mantengan separados el valor fuente, la interpretacion tentativa y las reglas que requieren decision de planta.
+Iteracion 01/10: Paso 4 añade mapeo tipado provisional visible por campo y detección de valores temporales/números cuyo formato necesita confirmación. El dato original se conserva; no se interpreta ni carga automáticamente. 3 pruebas focalizadas aprobadas; respaldo restaurado en base temporal, Django/JS limpios, sin migraciones y health 200. Estimación global P0/P1: 64% (+1 punto). Sigue pendiente resolver formatos por fuente, mapear referencias/reglas aprobadas y habilitar confirmación transaccional tras decisiones de planta.
+Iteracion 01/10: prevalidacion integrada con conciliacion de referencias de activos, mantenimientos, materiales e inventario. Reporta referencias ausentes/ambiguas/vacias y claves repetidas por hoja; filas excluidas no bloquean. Pruebas focalizadas 6/6 aprobadas, respaldo restaurado en temporal, Django y JS limpios, sin migraciones y health 200. Estimacion P0/P1: 65%. Pendiente completar reglas/validaciones aprobadas y transaccion segura de importacion con datos autorizados por planta.
+Iteracion 01/10: Paso 4 detecta claves tecnicas ausentes por tipo de hoja (codigo, folio o ID relacionado), las muestra como observaciones revisables y respeta filas excluidas. 7 pruebas focalizadas aprobadas; respaldo restaurado en temporal, Django/JS limpios, sin migraciones y health 200. Estimacion global P0/P1: 66%. No habilitar importacion hasta acuerdos de planta y validacion con fuente aprobada.
+Iteracion 02/10: el resultado de prevalidacion expone por que la importacion sigue cerrada: clasificacion del archivo/corte D-12, aprobacion de mapeos y reglas D-02/D-04/D-09/D-10, y escritor transaccional deshabilitado. 4 pruebas focalizadas aprobadas; respaldo restaurado en temporal, Django/JS limpios, sin migraciones y servicio saludable. Estimacion P0/P1: 66%, sin cambio funcional. La habilitacion requiere fuente y decisiones aprobadas.
+Correccion 02/10: se reemplaza version manual de `app.js` por hash SHA-256 calculado al servir la pagina y `Cache-Control: no-cache`; evita que el navegador mantenga la interfaz anterior tras despliegues. Prueba de URL con hash y archivo 200, suite focalizada 5/5, Django/JS limpios, sin migraciones y health 200. Estimacion P0/P1 66%, sin cambio de alcance.
+Iteracion 02/10: descarga XLSX del resumen de prevalidacion del lote. Incluye conteos por estado/tipo, bloqueos, referencias y decisiones que impiden carga; omite nombre del archivo fuente y valores originales de celdas. Respeta `users.manage`, no-store y mantiene cerrada la importacion. Pruebas focalizadas 5/5, JS/Django limpios, sin migraciones y web/base saludables. Falta despliegue con respaldo y smoke HTTP autenticado. Estimacion P0/P1: 67% (+1 por hacer revisable/portable la prevalidacion).
+Iteracion 02/10 (Paso 5, inventario): terminado recorrido de operación diaria con búsqueda/categoría/stock, CSV y XLSX del mismo filtro e historial visible de movimientos por artículo. Suite API 8/8, `manage.py check`, sin migraciones, JS y smoke local correctos; respaldo `mesa-mantenimiento-20261002-111952.dump` restaurado en base temporal; solo web desplegado, `/api/health` 200. Base operativa tiene cero artículos, por lo que la revisión en uso requiere carga de catálogo/saldos de prueba autorizada. Estimación P0/P1: 69% (+2 por entrega funcional de inventario).
+Iteracion 02/10: agenda ahora alterna calendario quincenal/lista, agrupa OT por técnico y fecha, resalta días con trabajo y permite abrir cada orden; alta de OT conserva programación. Modal compartido permite formulario/celdas para formularios operativos y recuerda preferencia. 17 pruebas focalizadas, checks Django/JS limpios, sin migraciones; respaldo `mesa-mantenimiento-20261002-115042.dump` restaurado, despliegue solo web y health 200. Avance P0/P1: 71%. La cuadrícula es captura familiar por celdas con guardado normal, no pegado/importación masiva; reprogramación mantiene motivo y auditoría desde detalle.
+
+Correcci?n 02/10 por revisi?n de usuario: sustituida la cuadr?cula de d?as por calendario mensual de 6x7 con navegaci?n, OT en su fecha, lista alternable y accesos a detalle. Retirado el falso modo Excel de modales; Inventario ahora tiene hoja real de captura de m?ltiples renglones con pegado TSV desde Excel, edici?n/eliminaci?n, validaci?n previa y guardado transaccional/auditado, incluyendo movimiento de saldo inicial. Pruebas de contrato/API 5/5, check y JS limpios, sin migraciones; respaldo `mesa-mantenimiento-20261002-120617.dump` restaurado en temporal; web desplegado, `/api/health` 200 y estructura de CSS/JS comprobada por HTTP. Estimaci?n P0/P1: 72%. Falta inspecci?n visual en navegador disponible y ampliar hoja tabular a otros m?dulos en futuras iteraciones.

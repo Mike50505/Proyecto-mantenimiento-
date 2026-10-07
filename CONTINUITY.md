@@ -170,3 +170,11 @@ Verificación final: 10 pruebas aprobadas y sin errores de sintaxis. El bloque p
 - No importar datos históricos a producción sin lote revisado.
 - No declarar aceptación completa de una familia RF/RNF por tener únicamente una pantalla o una ruta básica.
 - Mantener separados cierre técnico, validación autenticada, estado del activo, criticidad, OT y paro.
+
+### Iteración 26 — cobertura de programación preventiva (cerrada)
+
+La vista de Preventivos muestra activos administrativamente activos sin plan vigente o con tareas/fechas base pendientes. `GET /api/preventives/coverage` entrega conteos y motivos filtrados por permisos de acción y área. La etiqueta "configurado" solo indica que existe un plan no ejecutado con tareas y fechas válidas; no equivale a ejecución ni cumplimiento. Se conservaron los datos históricos y las bases sin importar archivos.
+
+Verificación: pruebas unitarias de clasificación/fecha, prueba de ruta y permisos, sintaxis y regresión completa.
+
+Siguiente bloque sugerido: checklist autónomo por turno y hallazgos, una vez definidas plantilla, turnos y activos elegibles (D-05); mientras tanto, revisar la integridad histórica del checklist preventivo.

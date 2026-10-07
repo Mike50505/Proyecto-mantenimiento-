@@ -1,0 +1,537 @@
+SEGUIMIENTO DEL PROYECTO MANTENIMIENTO MESA — PLANTA RAMOS
+Actualizado: 2 de octubre de 2026
+Base de comparación: Requerimientos_Mantenimiento_MESA.docx (versión 1.0),
+requisitos.txt y Prompt_maestro_Mantenimiento_MESA.md.
+
+PROPÓSITO Y REGLA DE ACTUALIZACIÓN
+Este archivo es el registro de avance de la aplicación ACTIVA en django-version/.
+Actualizarlo al cerrar cada bloque: fecha, requisito/criterio, cambio, evidencia de
+prueba, pendiente y decisión de planta. «Implementado» significa que existe código;
+la aceptación operativa requiere pruebas, datos conciliados y validación de planta.
+CONTINUITY.md describe principalmente una versión Node anterior. Sus 26 iteraciones
+no se trasladan automáticamente a la versión Django. README.md de la raíz identifica
+django-version/ como aplicación activa.
+
+ESTADO GENERAL AL CORTE
+Hay una base funcional para usuarios, activos, OT, sesiones de tiempo, paros,
+inventario, preventivos y tablero básico. El piloto P0 y el alcance P1 NO están
+aceptados. Ya existen equivalencias revisables y líneas en activos; faltan la
+conciliación oficial, turnos operativos, calendario integrado, importación con
+conciliación, XLSX/PDF documentales,
+checklist autónomo por turno, Kaizen, indicadores gerenciales y operación segura en
+servidor definitivo.
+
+Evidencia de código: django-version/maintenance/models.py, views.py, tests.py,
+workbook_preview.py; django-version/static/index.html, app.js, print.html;
+django-version/compose.yaml, backup.ps1, verify-backup.ps1.
+Evidencia histórica: django-version/IMPLEMENTATION_STATUS.md e IMPORT_REVIEW.md,
+ambos con corte del 23 de septiembre. La restauración de un respaldo en una base
+temporal se reportó EN ESA FECHA; no se repitió en este corte.
+Verificación de este corte: comparación directa del DOCX, requisitos.txt, prompt
+maestro, modelos, API, interfaz y pruebas Django. La instancia local sí respondió:
+docker compose ps mostró web y db saludables; GET / y GET /api/health respondieron
+200; manage.py check y migrate --check no reportaron problemas; manage.py test
+ejecutó 47 pruebas y todas pasaron tras los bloques recientes de desarrollo. Son
+pruebas locales, no aceptación integral.
+La base operativa consultada tiene 1 usuario y 0 activos, 0 OT, 0 artículos de
+inventario, 0 planes y 0 ocurrencias. Los libros Excel no están importados.
+manage.py check --deploy reportó 4 advertencias: HSTS, redirección HTTPS y cookies
+seguras de sesión/CSRF. El Compose expone HTTP en el puerto 8001; falta proxy HTTPS
+y configuración final antes de acceso compartido de planta.
+
+MATRIZ FUNCIONAL — RF-01 A RF-56
+Leyenda: BASE = existe flujo útil pero falta aceptación; PARCIAL = faltan partes
+importantes; PENDIENTE = no hay módulo funcional reconocible en Django.
+
+Acceso, catálogos y activos
+RF-01 BASE: inicio/cierre de sesión, permisos por acción y área; falta prueba real
+  entre dispositivos y despliegue seguro compartido.
+RF-02 PARCIAL: usuarios y activos editables; prioridades, clasificaciones,
+  especialidades, áreas, líneas y turnos tienen catálogo activable/desactivable.
+  Línea se guarda en la ficha de activo; faltan turnos/asignaciones y gobierno
+  integral de datos oficiales.
+RF-03 BASE: ficha de activo con código, tipo, área, línea, ubicación detallada,
+  marca, modelo, serie, voltaje, observaciones y estados. Faltan jerarquía oficial
+  y datos conciliados.
+RF-04 PARCIAL: ID, código, original y alias separados; tabla de equivalencias
+  con aprobación y auditoría. Falta resolver duplicados reales de los libros.
+RF-05 PARCIAL: estado operativo separado de criticidad y baja administrativa;
+  muestra causa, fecha y paros vinculados. Falta validar reglas con planta.
+RF-06 PARCIAL: expediente con OT, preventivos, paros, materiales netos, costos
+  separados y lecturas. Faltan hallazgos autónomos y validación visual.
+
+Órdenes de trabajo
+RF-07 BASE: folio anual transaccional e idempotencia de alta; prueba actual de
+  dos solicitudes simultáneas en PostgreSQL aprobada. Falta formato corporativo.
+RF-08 BASE: reporte inicial de solicitante separado de captura técnica; falta
+  validación de uso en planta y catálogos definitivos.
+RF-09 PARCIAL: cinco prioridades, incluido «Seguimiento», en catálogo
+  administrable. Su orden/semántica operativa espera D-11.
+RF-10 PARCIAL: siete clasificaciones iniciales en catálogo administrable; faltan
+  equivalencias históricas aprobadas.
+RF-11 PARCIAL: especialidades en catálogo administrable; faltan equivalencias
+  históricas y validación de nombres oficiales.
+RF-12 PARCIAL: responsable, colaboradores editables y acciones; faltan diagnóstico
+  estructurado y conservación/corrección de cada dato requerido.
+RF-13 PARCIAL: transiciones, eventos y versión; falta completar y validar todos
+  los estados y reglas de espera/pausa/programación.
+RF-14 PARCIAL: terminar y validar separados, checklist preventivo obligatorio;
+  faltan validaciones integrales de materiales, responsables y costos faltantes.
+RF-15 PARCIAL: reapertura, motivo, auditoría de fechas y corrección de sesiones
+  con valor anterior/nuevo. Cancelar exige motivo y disposición explícita de
+  materiales si hubo consumo; falta validar la política final con planta.
+RF-16 BASE: búsqueda y filtros de servidor compartidos por listado y CSV;
+  falta interfaz de todos los filtros y vistas de vencidas/asignadas.
+
+Tiempos y paros
+RF-17 BASE: intervalos manuales y controles Iniciar/Pausar/Terminar sesión por
+  técnico, con cruce de día y corrección autorizada auditada. Falta recorrido en
+  teléfono/tablet, captura tardía con operación real y recuperación de conexión.
+RF-18 BASE: suma de intervalos por participante, pausa sin sumar y rechazo de
+  traslape por persona. Falta prueba de concurrencia simultánea con PostgreSQL.
+RF-19 BASE: paro independiente vinculado a varias OT, confirmación explícita
+  al usar prioridad Paro de máquina y causa visible; cierre de una OT no libera
+  activo. Falta revisión operativa de causas y reglas de liberación con planta.
+RF-20 PARCIAL: agenda básica por técnico; faltan capacidad, estimaciones y alertas
+  de sobrecarga/solapamiento de asignaciones.
+
+Preventivos y programación
+RF-21 PARCIAL: plantillas por familia, tareas y revisiones de plan; faltan los
+  contenidos oficiales completos, tiempos, materiales y control
+  documental de las tres familias.
+RF-22 PARCIAL: tareas por plan/activo con aplicabilidad revisable y auditada;
+  falta conciliar los puntos oficiales de las tres familias con planta.
+RF-23 BASE: Órdenes y calendario programan la misma ocurrencia y OT canónica;
+  la ficha del activo abre el plan. Falta prueba operativa de extremo a extremo.
+RF-24 PARCIAL: vistas mensual, semanal, agenda y anual con leyenda P/T/D/V/R;
+  falta validación visual y operación con datos reales.
+RF-25 PARCIAL: cumplimiento calculado, fecha base y reprogramación conservadas;
+  verificar semántica de R como evento compatible con T/D/V y corte gerencial.
+RF-26 PARCIAL: intervalos independientes de días/meses y agrupación manual en una
+  OT; comando repetible sin duplicados y perfil opcional de ejecución horaria.
+  Falta activar con política D-06, recurrencia por horas y agrupación automática.
+RF-27 PENDIENTE: hay lecturas monotónicas de horómetro, pero no reglas mixtas
+  fecha/horas ni reinicio o sustitución de medidor.
+RF-28 PARCIAL: reprogramación con motivo y base intacta; cobertura de activos sin
+  plan y planes incompletos visible en el calendario general. Falta política final.
+RF-29 PARCIAL: aplicabilidad Externa por tarea; falta ejecución y costo por
+  proveedor/MTY con evidencia de cierre.
+
+Autónomos y hallazgos
+RF-30 PENDIENTE: no hay checklist autónomo versionado por activo y turno; el texto
+  libre «autonomous_checklist» en OT no equivale a una revisión de turno.
+RF-31 PENDIENTE: faltan respuestas y aplicabilidad propias del autónomo.
+RF-32 PENDIENTE: faltan hallazgos y su enlace idempotente a OT.
+RF-33 PENDIENTE: faltan obligaciones y cumplimiento por turno/activo.
+RF-34 PENDIENTE: faltan plantillas autónomas versionadas e historial; D-05 depende
+  de la plantilla y los turnos oficiales de planta.
+
+Inventario y costos
+RF-35 BASE: artículo, código, unidad, ubicación, saldo, costo y límites; falta
+  conciliación de saldos físicos y distinción formal de reparables como activos.
+RF-36 PARCIAL: movimientos y ajuste/importación con auditoría; verificar catálogo
+  completo de tipos, motivos, unidad y procedencia.
+RF-37 BASE: salida/devolución ligada a OT, clave idempotente y precio histórico;
+  falta aceptación con operación y escenarios concurrentes reales.
+RF-38 PARCIAL: mínimo/máximo y aviso visual de bajo stock; faltan sugerencia de
+  reposición y políticas aprobadas.
+RF-39 PARCIAL: materiales netos por OT/activo/tablero; faltan mano de obra y
+  servicios como costos rastreables y cortes completos por área/período.
+RF-40 PENDIENTE: faltan compra directa, proveedor, referencia y prevención de
+  doble conteo. Tarifas y valoración dependen de D-09.
+
+Kaizen
+RF-41 PENDIENTE: no hay entidad de proyecto, hitos ni actualizaciones.
+RF-42 PENDIENTE: no hay vínculos Kaizen con activos, hallazgos y OT.
+RF-43 PENDIENTE: no hay validación separada del avance reportado.
+RF-44 PENDIENTE: las 20 actividades siguen en el libro; no hay lote conciliado.
+
+Indicadores, alertas y documentos
+RF-45 PARCIAL: tablero de OT, críticos, recientes, inventario y preventivos;
+  ahora separa máquinas paradas con causa de OT con prioridad crítica e indica
+  hora de actualización. Se agrega filtro por fecha de solicitud para las métricas/listas de OT y XLSX con el mismo rango y permisos de área. Estados de activos, inventario, preventivos y alertas siguen siendo actuales. Activos parados enlazan a su expediente; accesos de preventivos e inventario llevan a sus módulos; OT prioritarias conservan acceso a detalle. Pendiente aceptación de planta.
+RF-46 PENDIENTE: no hay tablero gerencial completo con fórmulas, cortes y enlaces.
+RF-47 PARCIAL: ficha de activo muestra MTTR cuando hay datos; faltan disponibilidad
+  temporal, MTBF y denominadores/calendario aprobados.
+RF-48 PARCIAL: tablero con alertas persistentes para activos en parada, OT con prioridad Paro de máquina, preventivos vencidos o de hoy e insumos en/bajo mínimo. Mantenimiento puede registrar y actualizar atención con nota, usuario y fecha auditados; la alerta se cierra automáticamente cuando la condición de origen deja de estar vigente. Pendiente validar criterios, severidad y aceptación con planta.
+RF-49 PARCIAL: OT, activos, inventario y preventivos exportan XLSX tipado; OT e inventario también ofrecen CSV. OT respeta filtros y alcance de áreas; activos exporta la búsqueda visible y alcance de áreas; preventivos exporta el programa por área; inventario exporta los insumos activos que muestra la pantalla, con cantidades y costos a cuatro decimales cuando aplica y valor de existencia a dos. Solicitantes no reciben costos de OT. Pendientes XLSX para otros módulos y revisión/aceptación CA-19.
+RF-50 PARCIAL: PDF de servidor versionado e inmutable para OT correctivas, preventivas y autónomas. Cada versión guarda la captura de orden, materiales, checklist autónomo o preventivo, hash SHA-256 y auditoría; regenerar sin cambios reutiliza la copia. Pendiente registrar y aprobar el formato oficial y revisar permisos/legibilidad con usuarios (RF-53, CA-19).
+RF-51 PENDIENTE: faltan modo de junta y resumen PDF con el mismo corte.
+
+Gobierno e implantación
+RF-52 PARCIAL: AuditLog y eventos de OT; Administración/Jefatura tienen lista
+  paginada, filtros temporales y por entidad/acción, detalle antes/después y
+  XLSX del mismo filtro. Las áreas restringen entidades operativas; inventario
+  conserva acceso global. Técnico y Solicitante no acceden por defecto. Falta
+  cobertura integral de cambios y política de retención.
+RF-53 PARCIAL: código/revisión documental se conserva en cada captura PDF inmutable. Sigue pendiente el registro maestro de formatos con vigencia, aprobador y reglas oficiales; la copia se identifica como versión MESA y no sustituye el formato aprobado de planta.
+RF-54 PARCIAL: vista previa XLSX/XLSM con hojas, muestras y duplicados; lotes
+  identificados por hash, consulta de todas las filas de origen y descarte
+  auditado. Hay decisión auditada por fila y propuestas de vínculo con activo.
+  Faltan mapeo, conciliación completa, aprobación, confirmación e
+  importación operativa.
+RF-55 PARCIAL: README, estado y procedimientos de respaldo; faltan proceso
+  anterior/futuro, manuales por rol, capacitación, acta y responsables de aceptación.
+RF-56 PARCIAL: Compose con persistencia y reinicio, scripts de respaldo/prueba;
+  faltan servidor definitivo, HTTPS, copia externa automática, retención, UPS y
+  procedimiento probado con TI.
+
+REQUISITOS NO FUNCIONALES — RNF-01 A RNF-12
+RNF-01 PARCIAL: existe captura web móvil; medir con operadores el objetivo de 2 min.
+RNF-02 PENDIENTE DE VERIFICAR: probar navegadores y tablets reales.
+RNF-03 PARCIAL: autenticación, hash Django y permisos; HTTPS no desplegado. El
+  check --deploy actual señala HSTS, redirección y cookies seguras pendientes.
+RNF-04 PARCIAL: transacciones e idempotencia en flujos clave; ampliar concurrencia,
+  recuperación y manejo de fallos en escenarios CA.
+RNF-05 PENDIENTE: no hay mediciones de 20 usuarios, p95 ni actualización del tablero.
+RNF-06 PARCIAL: Compose reinicia servicios y persiste DB; comprobar LAN y reinicio.
+RNF-07 PARCIAL: respaldo/restauración temporal reportados; automatizar copia externa,
+  retención y objetivos RPO/RTO con TI.
+RNF-08 PARCIAL: auditoría y revisiones de plan; falta procedencia de importaciones
+  y control documental integral.
+RNF-09 PENDIENTE DE VERIFICAR: hay atributos de accesibilidad; faltan teclado,
+  lector de pantalla, contraste y zoom comprobados en todo el flujo.
+RNF-10 PARCIAL: migración Django, pruebas y guía básica; falta documentación
+  operativa y regresión completa de reglas críticas.
+RNF-11 PARCIAL: Compose y CSV; falta instalación limpia/restauración end-to-end.
+RNF-12 PARCIAL: permisos de costo y estado de conexión visibles; faltan borradores,
+  recuperación de captura y revisión de tablets compartidas.
+
+CRITERIOS DE ACEPTACIÓN — CA-01 A CA-24
+Ningún CA está aceptado por planta. Las 47 pruebas automatizadas pasaron el
+28/09, pero comprueban solo partes de los criterios. Estado y brecha principal:
+CA-01 PARCIAL: folio/idempotencia, dos solicitudes simultáneas y reintento
+  concurrente con la misma clave probados en PostgreSQL; falta recorrido real.
+CA-02 PARCIAL: separación operador/técnico probada; falta recorrido con usuarios.
+CA-03 PARCIAL: varias restricciones API probadas; falta matriz completa por rol.
+CA-04 PARCIAL: intervalos, cruce de día, dos participantes, pausa y traslape
+  probados; falta prueba con tiempos reales y operación concurrente.
+CA-05 PARCIAL: corrección horaria con motivo y valores anterior/nuevo probada;
+  reapertura conserva eventos, pero faltan consumos y validación previa en un
+  recorrido integral.
+CA-06 PARCIAL: dos OT comparten un paro; cancelar una conserva el activo parado.
+  Falta cálculo de indisponibilidad temporal y liberación con causas simultáneas.
+CA-07 PARCIAL: aplicabilidad por tarea revisada y N/A motivado; falta matriz oficial
+  y ejecución externa documentada por actividad.
+CA-08 PARCIAL: misma ocurrencia desde Órdenes y calendario, V automático por fecha;
+  falta recorrido visual y operativo con datos de planta.
+CA-09 PARCIAL: fecha base y reprogramación probadas; falta corte gerencial completo.
+CA-10 PARCIAL: comando repetido no duplica OT y mensual/trimestral conservan
+  fechas independientes; falta prueba del servicio activo tras reinicio real.
+CA-11 PENDIENTE: regla mixta y sustitución/reinicio de horómetro.
+CA-12 PARCIAL: calendario muestra activos sin plan y planes incompletos; faltan
+  obligaciones de checklist autónomo por turno.
+CA-13 PENDIENTE: revisión autónoma por turno, hallazgo y OT asociada.
+CA-14 PARCIAL: salida/devolución e idempotencia probadas; falta concurrencia real.
+CA-15 PARCIAL: costo histórico de material probado; falta compra directa/costos.
+CA-16 PENDIENTE: Kaizen y avance validado no están implementados.
+CA-17 PENDIENTE: conciliación tablero/listado/XLSX con el mismo corte.
+CA-18 PENDIENTE: disponibilidad temporal con paros superpuestos y denominador.
+CA-19 PARCIAL: XLSX tipado de OT y PDF versionado de OT aplican permisos; falta validar legibilidad, códigos/revisiones oficiales y completar otros reportes.
+CA-20 PARCIAL: repetir el mismo archivo reutiliza el lote y conserva filas
+  de origen; las decisiones por fila usan versión y auditoría. Faltan
+  conciliación completa e importación operativa confirmable.
+CA-21 PENDIENTE DE VERIFICAR: móvil/tablet/escritorio, teclado y zoom.
+CA-22 PARCIAL: versión/conflicto de edición y acciones de sesión; faltan
+  desconexión y reinicio durante captura.
+CA-23 PARCIAL HISTÓRICO: restauración temporal el 23/09; falta instalación limpia,
+  documentos y repetición de recuperación en el entorno final.
+CA-24 PENDIENTE: versiones/procedencia completas y aceptación/capacitación.
+
+DECISIONES EXTERNAS D-01 A D-12
+Siguen abiertas según la especificación: D-01 infraestructura/acceso; D-02 activos
+y duplicados; D-03 folios y códigos documentales; D-04 equivalencia 14 puntos/11
+grupos; D-05 autónomos y turnos; D-06 frecuencias y anclaje; D-07 fórmula gerencial;
+D-08 autorizaciones; D-09 inventario y tarifas; D-10 avance Kaizen; D-11 significado
+de Seguimiento/equivalencias; D-12 corte de migración, retención y piloto.
+No cargar los libros a operación ni inventar estos valores para cerrar requisitos.
+
+SIGUIENTE SECUENCIA DE TRABAJO
+1. Revisar en teléfono/tablet el flujo de OT, sesiones y cancelación; acordar
+   con planta liberación de paro, permisos de validación y CA-01/04/05/06.
+2. Completar turnos en entidades y equivalencias aprobadas
+   de activos, manteniendo datos históricos; cerrar D-02, D-03, D-08 y D-11.
+3. Unificar programación preventiva desde OT, calendario y activo; terminar vistas,
+   aplicabilidad y criterios CA-07 a CA-12. Acordar D-04/D-06.
+4. Construir lotes de importación revisables con procedencia, conflictos y
+   repetición segura. Conciliar activos, OT, inventario y Kaizen antes de confirmar.
+5. Completar XLSX/PDF, indicadores y documentación; hacer pruebas en móvil/tablet,
+   seguridad de despliegue, respaldo externo y aceptación de planta.
+6. Continuar P1 con autónomos/hallazgos, Kaizen, costos completos y disponibilidad;
+   pedir a planta las definiciones D-05, D-07, D-09 y D-10.
+
+BITÁCORA DE CAMBIOS
+2026-09-24 | Se creó este seguimiento tras cotejar DOCX, requisitos.txt, prompt
+maestro, código Django y notas de estado. No se alteró la aplicación ni los datos.
+2026-09-24 | Revisión actualizada: Docker volvió a estar disponible. Web y base
+saludables; GET / y /api/health = 200; check y migrate --check correctos; 19/19
+pruebas aprobadas. Base operativa aún sin registros de mantenimiento. Se detalló
+el estado de CA-01 a CA-24 y se registraron 4 advertencias de despliegue HTTPS.
+No se importaron datos ni se modificó la aplicación.
+2026-09-24 | Paso 1 iniciado (PLAN_DESARROLLO_MESA.txt). Cambios en
+django-version/maintenance/views.py, tests.py y static/app.js: colaboradores,
+sesiones Iniciar/Pausar/Terminar, intervalos manuales por participante, bloqueo
+de traslapes, corrección auditada, cierre de sesiones antes de salir del estado
+En proceso, cancelación con motivo y reapertura autorizada. Docker reconstruido;
+26/26 pruebas Django, manage.py check, makemigrations --check --dry-run y
+node --check static/app.js pasaron. La base operativa no recibió datos de prueba.
+También se probaron folios concurrentes en PostgreSQL, un paro ligado a dos OT,
+confirmación de paro, conservación de consumo tras cancelación/reapertura y
+tablero que distingue activo parado de prioridad crítica. GET /api/health = ok;
+base operativa con 0 activos, 0 OT, 0 artículos y 0 planes.
+Pendientes de ese corte: reintentos con igual clave, sesiones concurrentes,
+política de liberación y revisión en dispositivos. Los dos primeros se probaron
+en el corte siguiente; los demás siguen abiertos.
+2026-09-24 | Paso 1 reforzado y Paso 2 iniciado. Hash de petición y bloqueo
+transaccional por solicitante evitan duplicar una OT con reintentos simultáneos;
+datos distintos con la misma clave devuelven conflicto. Se probó que un técnico
+no inicia sesiones simultáneas en dos OT. Migración 0002 aplicada. El catálogo
+administrable con activación (prioridad, clasificación, especialidad, área, línea,
+turno) se incorporó con migración 0003 y valores iniciales; incluye Seguimiento.
+Desactivar conserva OT antiguas y bloquea uso nuevo. Administración/Jefatura
+pueden gestionar valores desde la interfaz. 29/29 pruebas Django, check,
+makemigrations --check --dry-run y node --check pasaron. La base operativa tiene
+18 valores de catálogo y continúa con 0 activos y 0 OT. No se importaron libros.
+Pendiente: revisar interfaz en dispositivos; conectar líneas/turnos y equivalencias
+de activos, validar catálogos oficiales y D-11 con planta.
+2026-09-24 | Se añadió línea y ubicación detallada a activos (migración 0004),
+con validación contra líneas activas y conservación del valor histórico inactivo.
+30/30 pruebas Django, migraciones y sintaxis JS verificadas. Próximo bloque:
+equivalencias revisables de códigos de activo y expediente integral. Sigue
+pendiente la revisión visual en dispositivos y la definición de planta D-02/D-11.
+
+2026-09-24 | Paso 2, equivalencias de activos (RF-04/RF-06). Se añadió el modelo
+AssetCodeEquivalence y migración 0005, con propuesta que conserva ceros y guiones,
+origen por archivo/hoja/fila, aprobación, rechazo o revocación motivada, controles
+de colisión entre activos y auditoría. La ficha del activo muestra todas las
+propuestas; el listado identifica y busca códigos aprobados. Los campos históricos
+original_code y alias_codes aún son referencias por conciliar, sin aprobación
+automática ni carga de los libros Excel. La migración 0005 se aplicó en la base
+local y se actualizó el servicio Docker. 34/34 pruebas Django pasaron;
+makemigrations --check --dry-run y node --check de la nueva pantalla correctos.
+Pendiente: revisión visual en móvil/tablet, expediente con preventivos/paros y
+documentos, turnos operativos, reglas oficiales D-02/D-03/D-11 y conciliación
+de los datos históricos. Estado: PARCIAL.
+
+2026-09-24 | Paso 2, expediente de activos (RF-05/RF-06). La API y ficha reúnen
+OT, planes preventivos, paros con sus OT, materiales consumidos netos de devolución
+y últimas lecturas de horómetro. El costo separa mano de obra y material, con
+precio histórico del consumo y sin duplicarlo por paros relacionados. La edición
+de activo ya no puede liberar manualmente un paro abierto; registra fecha al
+cambiar estado o causa. 37/37 pruebas Django, makemigrations --check --dry-run y
+node --check pasaron. Sin cambios de esquema en este bloque. Pendiente: hallazgos
+autónomos, turnos operativos, revisión visual en dispositivos y decisiones de
+planta D-02/D-11. Estado: PARCIAL.
+La ficha también abre el formulario preventivo existente con el activo ya
+seleccionado; usa el mismo endpoint de programación. Paso 3 iniciado de forma
+incremental; falta unificar la intervención desde OT/calendario y vencimientos.
+
+2026-09-24 | Paso 3, calendario y aplicabilidad (RF-21 a RF-25, RF-28;
+CA-07/08/09/12). Se añadió /api/preventive-calendar con vistas mensual, semanal,
+agenda y anual en la interfaz, estados P/T/D/V y R histórico; muestra activos
+sin plan y planes con tareas sin revisar. El cumplimiento general y el detalle
+usan la misma regla. Desde Órdenes y calendario se programa la ocurrencia
+canónica; se impiden OT preventivas genéricas sin tarea/fecha. Dos peticiones
+simultáneas a la misma ocurrencia comparten OT. La migración 0006 añade
+aplicabilidad Pendiente/Interna/Externa/No aplica por tarea, con motivo, autor,
+fecha, revisión de plan y auditoría. Solo tareas aprobadas generan vencimientos
+nuevos; ocurrencias históricas siguen visibles. 44/44 pruebas Django,
+makemigrations --check --dry-run y node --check correctos. Migración 0006
+aplicada a la base local. Pendiente: plantillas y puntos oficiales D-04,
+frecuencias D-06, planificador durable, reglas por horas/mixtas, ejecución
+externa y revisión visual en dispositivos. Estado: PARCIAL.
+
+2026-09-24 | Paso 3, planificador preventivo repetible (RF-26/CA-10). Se añadió
+plan_preventives con vista previa por defecto y --apply explícito. Usa anclaje
+fijo de fecha, ventana acotada y bloqueo conservador de la siguiente OT de una
+tarea si existe otra anterior abierta; deja intactas las demás tareas del plan.
+Cada ocurrencia creada registra fuente y auditoría. El perfil Docker planner
+corre cada hora y tras reinicio, pero está desactivado hasta confirmar D-06 y
+configurar usuario/ventana. En prueba se ejecutó dos veces sin duplicar OT; la
+tarea mensual completada generó su siguiente vencimiento sin mover el trimestral.
+Vista previa de la base local: 0 planes y 0 OT propuestas; no escribió datos.
+47/47 pruebas Django, migraciones sin cambios pendientes y Compose validado.
+Pendiente: respuesta de planta sobre anclaje/arrastre, activación controlada,
+recurrencia por horómetro y regla mixta, plantillas oficiales y revisión visual.
+Estado: PARCIAL.
+
+2026-09-28 | Paso 4 iniciado, lotes de revisión (RF-54/CA-20). Se habilitó
+consulta del historial y detalle de vistas previas, con SHA-256, resumen de
+hojas/filas/conflictos y descarte motivado y auditado. Un reenvío idéntico
+conserva el mismo lote; no se alteran activos, OT ni inventario. La migración
+0008 conserva todas las filas legibles, con hoja, número, valores y fórmulas
+guardadas; la API y pantalla permiten consulta paginada. Hay límites explícitos
+de 10 000 filas y 5 millones de caracteres por libro. Aún faltan mapeo,
+conciliación/decisión por fila y confirmación de carga. Respaldo previo de
+PostgreSQL verificado mediante restauración en base temporal. Imagen Docker
+reconstruida, 47/47 pruebas Django aprobadas, migraciones sin cambios de modelo
+pendientes, node --check correcto, GET / y /api/health = 200 y migraciones
+0007/0008 aplicadas. Base operativa: 0 activos, 0 OT, 0 artículos, 0 planes,
+0 lotes y 0 filas. Sin validación visual en teléfono/tablet ni aceptación de
+planta. Estado: PARCIAL.
+La lectura de prueba, sin guardar lotes, procesó los tres libros de origen:
+Mantenimiento PLANIFICADO RAMOS.xlsm (18 hojas, 467 filas legibles),
+Sistema_OT_MESA_Planta_Ramos_V3.xlsm (4 hojas, 41 filas) y
+Periodico Kaizen.xlsx (2 hojas, 23 filas). Se amplió el límite de ancho por
+fila tras detectar una hoja de origen con más de 256 celdas con contenido.
+
+2026-09-28 | Paso 4, revisión por fila. La migración 0009 permite marcar cada
+fila como Pendiente, Excluida o Propuesta de vínculo con un activo existente,
+con motivo, autor, fecha, versión y auditoría. La interfaz muestra el estado y
+permite registrar la decisión; rechaza versiones antiguas y lotes descartados.
+CALENDARIO identifica códigos en B desde la fila 13. La propuesta no cambia
+activos ni confirma una importación. Respaldo previo
+backups/mesa-mantenimiento-20260928-095512.dump restaurado en base temporal.
+48/48 pruebas Django aprobadas, migración 0009 aplicada, API de salud 200.
+Base operativa aún con 0 activos, 0 OT, 0 artículos, 0 planes y 0 lotes.
+Faltan mapeo y conciliación completos, aprobación de planta, confirmación
+transaccional y validación visual en dispositivos. Estado: PARCIAL.
+
+2026-09-28 | Paso 4, conciliación de códigos. El detalle del lote agrupa
+candidatos de activo por código entre MAQUINAS, BASE DE DATOS y CALENDARIO,
+muestra procedencia y decisiones de fila, señala repeticiones dentro de la
+misma hoja y compara con códigos vigentes y equivalencias aprobadas en Django.
+La consulta es paginada y no confirma equivalencias ni carga activos. Respaldo
+backups/mesa-mantenimiento-20260928-100240.dump restaurado en base temporal.
+49/49 pruebas Django aprobadas, servicio local actualizado, API de salud 200.
+Base operativa y lotes siguen vacíos. Persisten las decisiones D-02/D-12 y el
+mapeo detallado de fuentes antes de una carga confirmable. Estado: PARCIAL.
+
+2026-09-28 | Paso 4, mapeo provisional por hoja. La lectura de los libros reales
+confirmó columnas distintas para activos, almacén, OT históricas y Kaizen.
+`maintenance/import_mapping.py` identifica esos campos en cada fila consultada
+sin alterar las celdas originales; la pantalla muestra los campos provisionales.
+La conciliación señala valores distintos de nombre, marca, modelo y voltaje.
+Fechas seriales, puntos G:T, pares planeado/estatus y marcas de avance no se
+convierten a hechos operativos. Detalle en `django-version/IMPORT_REVIEW.md`.
+Respaldo `mesa-mantenimiento-20260928-101648.dump` restaurado en base temporal;
+50/50 pruebas Django aprobadas, servicio local actualizado, salud 200 y base
+operativa/lotes todavía vacíos. Faltan normalización tipada y decisiones D-02,
+D-04, D-09, D-10 y D-12. Estado: PARCIAL.
+
+2026-09-28 | Paso 4, tipos de celda y fechas. La migración 0010 conserva
+metadatos de números, booleanos, errores y fechas/horas interpretadas por
+formato y sistema Excel 1900/1904, manteniendo siempre el valor original.
+Los errores de Excel se muestran como incidencias por fila. Se verificaron
+los tres libros reales en solo lectura: el de mantenimiento tiene 504 celdas
+de fecha, 2 de fecha/hora y 81 errores; ninguna fecha detectada quedó sin
+interpretar. Las fechas textuales se conservan sin convertir y no se crean
+hechos operativos. Respaldo `mesa-mantenimiento-20260928-103545.dump`
+restaurado en base temporal. 51/51 pruebas Django aprobadas, migración 0010
+aplicada, salud 200 y base operativa/lotes vacíos. Estado: PARCIAL.
+
+2026-09-28 | Paso 4, referencias entre hojas. El detalle del lote ofrece un
+cruce de MANTENIMIENTOS.B con MAQUINAS.A, PM.A con MANTENIMIENTOS.A y PM.C
+con ALMACEN.A. Informa coincidencias únicas, referencias faltantes, vacías o
+ambiguas con sus filas fuente; no genera OT ni movimientos. Imagen local
+compilada y servicio saludable (GET /api/health = 200); respaldo
+mesa-mantenimiento-20260928-104204.dump restaurado en base temporal. No se
+ejecutó la suite de pruebas en esta iteración. Sigue pendiente determinar con
+planta si las fuentes son reales y aprobar su conciliación. Estado: PARCIAL.
+
+2026-09-28 | Paso 4, bandeja de incidencias. El detalle del lote reúne filas
+con errores de Excel o fechas con formato temporal sin interpretación; muestra
+coordenada, valor original y fórmula y abre la fila fuente para registrar una
+decisión. Se pagina a 50 filas y no corrige ni importa datos. Imagen local
+compilada, servicio saludable y /api/health = 200. Respaldo
+mesa-mantenimiento-20260928-104801.dump restaurado en base temporal. No se
+ejecutaron pruebas automatizadas en esta iteración. Estado: PARCIAL.
+
+2026-09-28 | Paso 4, claves repetidas. El cruce de los libros encontró seis
+códigos duplicados dentro de CALENDARIO; TRANSFORMADOR ENERGIA se repite en
+filas 4 y 74 tanto en MAQUINAS como en BASE DE DATOS. No detectó IDs de origen,
+códigos de almacén ni folios duplicados. Halló MANTENIMIENTOS fila 4 sin ID de
+activo y PM fila 4 con referencia al ID de mantenimiento 3, no encontrado.
+La consulta del lote ahora presenta también claves repetidas internamente,
+separadas de coincidencias entre hojas espejo. Hallazgos y procedencia en
+`django-version/IMPORT_REVIEW.md`. Sin carga operativa.
+
+2026-09-28 | La pantalla de referencias ahora resume claves duplicadas por
+hoja junto a faltantes/ambigüedades y separa los códigos compartidos entre
+hojas espejo. Imagen local compilada, GET /api/health = 200, respaldo
+mesa-mantenimiento-20260928-105747.dump restaurado en base temporal. Suite de
+pruebas no ejecutada en esta iteración. No se han creado lotes ni registros de
+operación.
+
+2026-09-28 | El cruce de ID histórico hacia MAQUINAS ahora abre el código
+fuente resuelto y muestra sus apariciones en BASE DE DATOS/CALENDARIO, con
+repeticiones internas y variantes de nombre, marca, modelo y voltaje. No
+aprueba ni modifica activos. Imagen y servicio local actualizados; API de
+salud 200. Respaldo `mesa-mantenimiento-20260928-110506.dump` restaurado en
+base temporal. Suite automatizada no ejecutada en esta iteración.
+
+PLANTILLA PARA PRÓXIMA ACTUALIZACIÓN
+Fecha:
+Bloque y RF/CA:
+Cambio en código y archivo:
+Prueba ejecutada y resultado:
+Validación visual/operativa:
+Pendiente o decisión de planta:
+Estado nuevo (BASE/PARCIAL/PENDIENTE/ACEPTADO):
+
+2026-09-28 | Paso 5, primera entrega de reportes (RF-49, CA-19 parcial). La bandeja de OT ofrece XLSX con folio, activo, área, solicitante, técnico, estado, fechas, tiempos, falla reportada y acciones; los perfiles internos también reciben costos y notas de cierre. Los solicitantes no reciben esas columnas. Fecha y cifras se escriben como celdas de fecha/número; texto va como texto, sin evaluación de fórmulas. Exporta el mismo estado/búsqueda seleccionados y aplica los permisos y áreas autorizados. La cobertura de filtros es la que existe hoy en la bandeja (estado y búsqueda). Pendientes: XLSX de inventario y otros reportes, PDF versionado, control documental, alertas, revisar legibilidad con usuarios y completar CA-19. No se ejecutaron pruebas automatizadas en esta iteración.
+
+Despliegue final Paso 5: respaldo backups/mesa-mantenimiento-20260928-113137.dump restaurado correctamente en base temporal; imagen reconstruida con el ajuste por rol y servicio saludable. GET /api/health = 200. No se ejecutó la suite de pruebas en esta iteración.
+
+
+2026-09-28 | Paso 5, PDF de OT versionado (RF-50 parcial; RF-53/CA-19 parciales). Mantenimiento puede crear/consultar versiones en el detalle de OT. La captura inmutable incluye estado, activo, fechas, acciones, cierre, costos netos y materiales; conserva checklist preventivo/eventos o revisión autónoma cuando aplican. Cada PDF queda en base de datos con versión, fuente de OT, código/revisión capturados, SHA-256, usuario y auditoría. Un reintento sin cambios reutiliza la última copia. Solicitantes no pueden consultar estas copias; descarga respeta permisos y áreas. Muestra sintética renderizada a dos páginas, con tablas/listas y acentos legibles. No se crearon documentos para OT operativas. No se ejecutó la suite automatizada.
+
+Despliegue PDF versionado: respaldo backups/mesa-mantenimiento-20260928-142151.dump restaurado correctamente en una base temporal; migración 0011_workorderdocument aplicada; contenedor actualizado y saludable. GET /api/health = 200. Se inspeccionó visualmente el PDF sintético a dos páginas; no se generaron documentos para OT operativas. Suite automatizada no ejecutada.
+
+2026-09-28 | Paso 5, XLSX de inventario (RF-49, CA-19 parcial). Se añade exportación de insumos activos con las columnas de la vista más valor en existencia y estado de reabastecimiento. Existencias, mínimos, máximos y costo unitario son celdas numéricas a cuatro decimales; el valor de existencia va a dos decimales; el texto permanece como texto. Requiere inventory.read. Sin filtros, porque la pantalla actual no los presenta. No se ejecutó la suite automatizada.
+
+Despliegue XLSX de inventario: respaldo backups/mesa-mantenimiento-20260928-142739.dump restaurado correctamente en base temporal; no hubo migraciones adicionales; imagen reconstruida; GET /api/health = 200. Sin pruebas automatizadas en esta iteración.
+
+2026-09-28 | Paso 5, gestión de alertas (RF-48 parcial). Las condiciones ya calculadas por el tablero se materializan como alertas persistentes: activo parado, OT con prioridad Paro de máquina sin cerrar, preventivo con próxima fecha hoy o anterior, e inventario activo en/bajo mínimo. Personal interno puede registrar/actualizar una nota de atención; el sistema guarda usuario, fecha y auditoría. La condición deja de aparecer y la alerta pasa a Cerrada al desaparecer la causa; si reaparece se abre una nueva atención conservando el registro previo. Respeta áreas configuradas e inventario conserva el alcance global existente del tablero. Sin reglas nuevas de negocio ni importaciones operativas. Falta validar severidades y flujo con Planta Ramos/CA-19; no se ejecutó la suite automatizada.
+
+Corrección del XLSX de inventario: costo unitario con cuatro decimales y valor de existencia con dos, según el orden real de columnas.
+
+2026-09-28 | Paso 5, XLSX del programa preventivo (RF-49, CA-19 parcial). La pantalla permite exportar los planes del alcance autorizado con próxima fecha como celda de fecha y columnas de código/nombre/área de activo, actividad, plantilla, aplicabilidad, frecuencia, responsable, estado, versión y folio de OT asociado. Orden estable por vencimiento, activo y actividad. Pendiente revisión CA-19; suite automatizada no ejecutada.
+
+Despliegue XLSX preventivo: smoke check directo al endpoint autenticado devolvió HTTP 200, MIME de XLSX y firma ZIP `PK`; `/api/health` = 200 y servicios web/base saludables. Sin cambios en datos operativos.
+
+2026-09-28 | Paso 5, XLSX de activos (RF-49, CA-19 parcial). Exporta la ficha de activos con códigos y alias, atributos técnicos, área/línea/ubicación, estado operativo/administrativo, causa, criticidad y horas. La búsqueda exporta el mismo subconjunto visible y se limita a las áreas permitidas; requiere assets.read. Pendiente revisión CA-19; suite automatizada no ejecutada.
+
+2026-09-28 | Paso 5, corte por período del tablero (RF-45, RF-49 parcial). Se añade filtro opcional desde/hasta sobre fecha de solicitud de OT. Métricas, barras, prioritarias y recientes usan el mismo rango; XLSX del tablero exporta el conjunto de OT con el mismo filtro y límites de área. Un rango invertido se rechaza. Activos, inventario, preventivos y alertas muestran explícitamente condición actual, no valores históricos. Pendiente navegación a detalles y aceptación de planta.
+
+Despliegue corte tablero: respaldo backups/mesa-mantenimiento-20260928-151633.dump restaurado correctamente en base temporal. Smoke check autenticado: tablero filtrado 200, XLSX del mismo corte 200 y archivo válido (`PK`), intervalo invertido 400. Django check sin incidencias, sin migraciones pendientes y web/base saludables. Suite automatizada no ejecutada.
+
+Despliegue de navegación del tablero: JavaScript válido, smoke check autenticado repetido sobre tablero/XLSX (200), rango invertido (400), Django check sin errores y `/api/health` = 200. Contenedores saludables. Sin modificación de datos ni esquema; suite automatizada no ejecutada.
+
+Despliegue XLSX de activos: respaldo backups/mesa-mantenimiento-20260928-150711.dump restaurado correctamente en base temporal; smoke check autenticado con búsqueda devuelve HTTP 200 y archivo XLSX válido (`PK`); `/api/health` = 200 y web/base saludables. Sin migraciones adicionales ni cambios en datos operativos. Suite automatizada no ejecutada.
+
+Despliegue de alertas: respaldo backups/mesa-mantenimiento-20260928-145223.dump restaurado correctamente en base temporal; migración 0012_operationalalert aplicada automáticamente al iniciar el servicio; `manage.py check` sin incidencias, `makemigrations --check --dry-run` sin cambios y GET /api/health = 200. Base operativa verificada sin activos, OT, insumos, preventivos ni alertas; no se importaron ejemplos. No se ejecutó la suite automatizada.
+
+2026-09-28 | Paso 5, consulta de auditoría (RF-52 parcial). Administración/Jefatura consultan el historial paginado con filtro de fechas, entidad/ID, acción y búsqueda; pueden abrir JSON antes/después y exportar a XLSX el conjunto que cumple los mismos filtros. Se restringe el historial de usuarios con áreas a entidades operativas autorizadas e inventario global; Técnico y Solicitante no acceden por defecto.
+
+Despliegue auditoría: respaldo backups/mesa-mantenimiento-20260928-152741.dump restaurado correctamente en base temporal; smoke checks autenticados: consulta 200, XLSX 200 y firma `PK`, filtro de área 200; Técnico sin módulo y Solicitante 403. Se corrigió un filtro JSON/ID detectado en la primera comprobación. Django check limpio, sin migraciones pendientes, `/api/health` = 200 y contenedores saludables. Suite automatizada no ejecutada.
+
+
+2026-09-28 | RF-52, cobertura de auditoria ampliada: los cambios de usuarios registran rol, estado, permisos y areas sin guardar contrasenas; inventario y activos registran antes/despues; tambien se auditan lecturas de horometro, plantillas y alta/respuesta de checklist preventivo. Las lecturas y listas/respuestas respetan el filtro por area. Verificacion: Django check limpio, sin migraciones, consultas de auditoria global/area 1/0, health 200 y respaldo restaurado. RF-52 sigue parcial: falta revisar cobertura de rutas restantes y definir retencion.
+
+
+2026-09-28 | RF-49, exportacion del historial de paros (CA-19 parcial). La pantalla Paros y agenda operativa ahora ofrece XLSX con activo, codigo, area, causa, inicio/fin, estado, folios de OT relacionados, quien registro/cerro y motivo de cierre. Fechas tipadas, orden estable y filtro por areas del usuario. No calcula disponibilidad ni duracion; esos criterios pertenecen a RF-47/CA-18 y requieren denominadores aprobados. Smoke check autenticado: 200, MIME XLSX, firma PK; base sin eventos de paro; Django check limpio, sin migraciones y health 200. Respaldo mesa-mantenimiento-20260928-160314.dump restaurado en base temporal. Suite automatizada no ejecutada.
+
+
+2026-09-28 | CA-17, paridad de exportacion de OT. El enlace XLSX ahora transmite los filtros de estado y busqueda de la bandeja; CSV conserva los mismos parametros. La busqueda de pantalla/servidor se alineo para folio, activo (nombre/codigo), falla y solicitante. Sintaxis JS valida. Smoke autenticado con estado y consulta: API/lista 200 (0 filas), CSV 200 y XLSX 200 con firma PK. La base no tiene OT operativas; se verifico la ruta sin crear ejemplos. Respaldo mesa-mantenimiento-20260928-163123.dump restaurado en temporal; Django check limpio, sin migraciones y servicios saludables. CA-17 requiere aun conciliacion con datos y aceptacion de planta.
+
+
+2026-10-01 | Paso 4, prevalidacion tecnica de lotes (RF-54/CA-20). Nuevo resumen por tipo de fila: decisiones pendientes/propuestas/excluidas, mapeo, observaciones, errores Excel, fechas sin interpretar y formulas sin valor; filas excluidas no bloquean las restantes. La interfaz distingue prevalidacion de aprobacion y deja la importacion operativa deshabilitada. Se agrego prueba Django focalizada, no ejecutada. Implementado endpoint de consulta de prevalidacion y UI. Los libros siguen sin cargar a la base operativa.
+
+2026-10-01 | Paso 5, exportacion XLSX de alertas (RF-49 parcial). Exporta el mismo alcance de alertas operativas y areas permitidas que la bandeja; sin incluir datos de solicitantes. Columnas y tipos de celda preservan texto, fechas y valores. Despliegue: respaldo `backups/mesa-mantenimiento-20261001-114253.dump` restaurado correctamente en base temporal (0 OT históricas en la tabla consultada); imagen web reconstruida y contenedor actualizado. `manage.py check` limpio, `makemigrations --check --dry-run` sin cambios; smoke autenticado `GET /api/alerts/export.xlsx` = 200, MIME XLSX y firma `PK`; `GET /api/health` desde host = 200; web y base saludables. No se ejecutó la suite automatizada ni se cargaron libros de ejemplo. La prevalidacion queda desplegada, pero no hay lotes reales que probar sin cargar los libros de ejemplo.
+2026-10-01 | Iteracion de verificacion (RF-54/CA-20 y RF-49). Pruebas focalizadas de prevalidacion y exportacion de alertas: 2/2 aprobadas en contenedor temporal. La prueba XLSX confirma filtro por area y acceso denegado a Solicitante; la prevalidacion confirma que fila excluida no oculta bloqueos activos ni habilita importacion. No se reinicio web ni se modifico la base operativa. Estimacion global P0/P1: 63% (sin cambio por ser iteracion de calidad; aceptacion de planta y despliegue productivo pendientes). Siguiente: mapeo tipado y validaciones tecnicas sin convertir reglas de planta o ejemplos en datos aprobados.
+2026-10-01 | Paso 4, mapeo tipado provisional (RF-54/CA-20). Las filas ahora exponen tipo esperado por campo (texto original, fecha/hora candidata o número candidato), mantienen intacto el valor fuente y señalan por fila datos cuyo tipo/formato requiere confirmación. Fechas de texto en campos temporales aparecen como pendientes y cuentan en prevalidación; no se convierten automáticamente. UI muestra tipo y observaciones. Pruebas focalizadas: 3/3 aprobadas. Respaldo `backups/mesa-mantenimiento-20261001-124514.dump` restaurado en base temporal; `manage.py check` limpio, sin migraciones, JS válido, health 200 y servicios saludables. Se actualizó solo web; no se crearon lotes ni se importaron libros. Estimación global P0/P1: 64% (+1 punto por ampliar la prevalidación tipada; aceptación de planta/productivo siguen pendientes).
+2026-10-01 | Paso 4, referencias integradas a prevalidacion (RF-54/CA-20). El boton Evaluar lote ahora incluye referencias sin coincidencia, ambiguas o vacias entre MANTENIMIENTOS, MAQUINAS, PM y ALMACEN, y claves duplicadas dentro de una hoja; expone conteo por relacion. Las filas excluidas quedan fuera de conciliacion y de bloqueos. No cambia valores fuente ni autoriza importacion. Pruebas focalizadas 6/6 aprobadas (prevalidacion, mapeo, referencias y exportacion de alertas). Respaldo `backups/mesa-mantenimiento-20261001-140142.dump` restaurado en temporal; Django check limpio, sin migraciones, JS valido, health 200 y web/base saludables. Solo se actualizo web; sin lotes ni importaciones. Estimacion global P0/P1: 65% (+1 punto por integrar conciliacion tecnica al control de preparacion).
+2026-10-01 | Paso 4, claves tecnicas minimas (RF-54/CA-20). El mapeo provisional ahora marca candidatos sin codigo de insumo, ID de mantenimiento, referencias PM requeridas o folio de OT, segun la estructura de origen. Son bloqueos tecnicos revisables; excluir la fila la saca de las cuentas de preparacion. No crea registros ni cambia datos fuente. Pruebas focalizadas 7/7 aprobadas. Respaldo `backups/mesa-mantenimiento-20261001-142754.dump` restaurado en base temporal; Django check limpio, sin migraciones, JS valido, health 200 y contenedores saludables. Se desplego solo web; no se importaron libros. Estimacion global P0/P1: 66% (+1 punto por cobertura de identificadores estructurales). La confirmacion operativa sigue cerrada hasta decisiones y datos aprobados por planta.
+2026-10-02 | Paso 4, causas explicitas del bloqueo de importacion. La prevalidacion ahora devuelve y muestra las decisiones pendientes D-12 (clasificar origen/fecha de corte), D-02/D-04/D-09/D-10 (aprobar campos y reglas por fuente) y el estado del escritor transaccional (aun deshabilitado). Incluso sin bloqueos tecnicos, el resultado no declara la carga lista. Pruebas focalizadas 4/4 aprobadas; respaldo `backups/mesa-mantenimiento-20261002-103423.dump` restaurado en temporal; Django check limpio, sin migraciones; JS valido; health HTTP/interno 200 y web/base saludables. Estimacion global P0/P1: 66% (sin cambio: esta iteracion aclara las puertas pendientes, no habilita el flujo). No se importaron ejemplos ni se modifico la base operativa.
+2026-10-02 | Correccion del fallo de interfaz por JavaScript obsoleto en caché. Causa: `index.html` mantenia una query versionada manualmente; el navegador podia reutilizar `app.js` anterior aunque el contenedor tuviera codigo nuevo. `static_app` ahora calcula SHA-256 de `app.js`, sustituye el marcador en el HTML y envia `Cache-Control: no-cache`; cada cambio produce URL nueva sin actualizar versiones manuales. Verificado hash local/servido `a21332b95ff4`, GET `/app.js?v=<hash>` 200. Pruebas focalizadas 5/5, `node --check`, Django check y sin migraciones; respaldo `backups/mesa-mantenimiento-20261002-105126.dump` restaurado correctamente en temporal; web/base saludables y health 200. Estimacion P0/P1 66% (sin cambio de alcance funcional). No se modificaron datos operativos ni se importaron libros.
+2026-10-02 | Paso 4, exportacion de prevalidacion XLSX (RF-54/CA-20). El detalle del lote ofrece descarga de resumen con conteos por hoja/estado, bloqueos tecnicos, referencias y decisiones pendientes. Solo incluye datos agregados/estados; excluye nombre del archivo fuente y valores de celdas. La descarga conserva permiso `users.manage`, no-store y no autoriza importacion. Pruebas focalizadas de prevalidacion y exportacion de alertas: 5/5; JS valido, Django check limpio y sin migraciones. Servicio web/base saludables; despliegue web pendiente de respaldo y smoke final. Estimacion global P0/P1: 67% (+1 por facilitar revision y evidencia del lote).
+2026-10-02 | Paso 5, operación diaria de inventario (RF-35/36/38/49). El módulo ahora permite buscar por código, descripción, categoría y ubicación; filtrar por categoría y existencia bajo/en mínimo; muestra el subconjunto y métricas actualizadas, y mantiene CSV/XLSX sincronizados con la selección. Cada insumo abre su historial de entradas, salidas, ajustes y devoluciones con fecha, cantidad, costo, OT, usuario y notas; el permiso de lectura se conserva y Solicitante recibe 403. Suite ApiWorkflowTests 8/8 aprobada (incluye filtro/exportaciones e historial/permisos); Django check limpio, sin cambios de esquema, JS válido. Respaldo `backups/mesa-mantenimiento-20261002-111952.dump` restaurado en base temporal. Solo se actualizó web; `/api/health` 200, hash de JavaScript nuevo presente y cero insumos operativos. Estimación global P0/P1: 69% (+2 por completar consulta y trazabilidad visible de inventario). Para período de prueba hace falta cargar catálogo/saldos autorizados; no se importaron libros de ejemplo.
+2026-10-02 | Agenda con vistas alternables (RF-20/23/24): calendario quincenal y lista por técnico; los días con OT se resaltan, las prioridades de paro se distinguen y cada bloque abre la OT. Se muestra la fecha programada y, cuando no existe, se usa fecha de solicitud para no ocultar trabajo; la programación desde alta ahora conserva `scheduled_at`. Preferencia de vista persistida por navegador. Captura tipo celdas disponible en el modal compartido para formularios de OT, activos, inventario, movimientos, preventivos, usuarios y captura auxiliar; se mantiene la presentación habitual como opción y se recuerda la preferencia local. Pruebas de contratos UI, agenda, preventivos e inventario: 17/17; Django/JS limpios, sin migraciones. Respaldo `backups/mesa-mantenimiento-20261002-115042.dump` restaurado temporalmente; solo web actualizado; hash JS servido con los dos modos, `/api/health` 200 y servicios saludables. Avance P0/P1 estimado: 71% (+2 por experiencia calendario/captura extendida). La cuadrícula reorganiza los mismos campos y guarda por el flujo normal; no es edición masiva pegando rangos de Excel. La agenda no arrastra OT todavía; reprogramación continúa en el detalle con motivo/auditoría. No se crearon datos operativos.
+
+2026-10-02 | Correcci?n de las dos entregas de interfaz tras observaci?n de usuario. Se retir? el alternador cosm?tico del modal com?n. Inventario ofrece ahora ?Captura por celdas?: hoja editable de 9 columnas, pega desde Excel por tabuladores/renglones, agrega/elimina filas, valida antes de guardar y crea 1?500 art?culos en una transacci?n; c?digos repetidos o cualquier error cancelan el lote. Cada art?culo y carga quedan auditados; saldo inicial crea movimiento Ajuste. API cubierta por creaci?n, atomicidad, movimientos de apertura y permisos; contratos de UI cubren pegado/acci?n. Agenda reemplaza la lista de 14 d?as por calendario mensual real de 6 semanas x 7 d?as, con anterior/siguiente/hoy, eventos dentro del d?a, lista alternable y acceso a OT. 5 pruebas focalizadas aprobadas, Django check/JS limpios y sin migraciones. Respaldo `backups/mesa-mantenimiento-20261002-120617.dump` restaurado temporalmente; despliegue solo web; smoke HTTP de hash JS/CSS de 7 columnas y `/api/health` 200. Avance P0/P1: 72% (+1 por completar captura tabular funcional y calendario mensual). No hay navegador disponible en el entorno de agente para inspecci?n visual; el despliegue no cre? registros.
+2026-10-02 | Preparacion de instancia para pruebas funcionales: comando `demo_data` idempotente con borrado limitado al prefijo `PRUEBA-MESA-`. Carga local: 4 cuentas temporales, 5 activos, 7 OT en estados/fechas variados, 1 preventivo/3 tareas, 4 insumos con movimientos de saldo inicial y 2 paros. Preservados los registros preexistentes (`DEMO-MAQ-001` y OT existente). Respaldo `backups/mesa-mantenimiento-20261002-132127.dump` restaurado/verificado en DB temporal antes de carga. Despliegue web saludable; suite Django 66/66; login Jefatura de prueba y 8 endpoints (me, tablero, OT, activos, inventario, preventivos, agenda, paros) = 200; health = 200. Avance global P0/P1 estimado: 72% (sin cambio de alcance funcional; queda instancia lista para periodo de prueba). Comando de limpieza documentado en README.
+2026-10-02 | Aclaraciones de flujo de OT tras pruebas de usuario. En el detalle se hace explicito el paso `Terminar trabajo - enviar a validacion` y la posterior accion `Validar y cerrar OT` de Jefatura/Administracion. Se explica que terminar una sesion no cierra la OT, que horas hombre salen de intervalos, y que inicio/termino de la OT son marcas automaticas de estado. Codigo/revision documental quedan marcados opcionales con ayuda sobre formato de planta vs version PDF; las fechas de OT se explican junto a sus campos. Suite completa 67/67 antes del ultimo ajuste de posicion de ayudas; contrato de interfaz focalizado 3/3 despues; `node --check`, HTML/app.js/health HTTP 200 y servicio actualizado. Estimacion P0/P1 permanece 72%: claridad de operacion y no ampliacion de funciones.
+2026-10-02 | Simplificacion del cierre de OT por observacion de uso. Se retiran del detalle los campos de codigo/revision documental, motivo de cambio de fecha y la tarjeta de sesiones. La captura permite inicio y fin editables, seleccion de varios tecnicos mediante casillas y vista previa de horas hombre = horas transcurridas x tecnicos asignados. Guardar refresca y reabre el detalle; Terminar trabajo guarda los cambios pendientes y envia a validacion en el mismo recorrido. La API ya no exige motivo al cambiar fecha, compara IDs de tecnico por valor y calcula horas segun intervalo/asignados; la captura manual sustituye el calculo de sesiones anteriores en OT editadas. La marca manual de fin se conserva al pasar a validacion. Suite 68/68, pruebas focalizadas del caso nuevo y de historial anterior 2/2 tras ultimo ajuste, JS valido. Respaldo `backups/mesa-mantenimiento-20261002-142745.dump` restaurado/verificado en base temporal; web actualizado, HTML/app.js/health 200. Los datos de prueba siguen presentes. Avance global P0/P1 estimado: 73% (+1 por cierre operativo utilizable en un solo recorrido).
+
+2026-10-02 | Programa preventivo con vistas Calendario/Lista alternables. Calendario mensual real de 42 dias y 7 columnas, marcas por tarea/activo/estado, navegacion temporal y apertura de OT o plan; lista de planes conserva acciones existentes. Preferencia persistida en navegador. Suite 75/75; API mensual entrego 12 ocurrencias; web actualizado y health 200. Avance P0/P1 estimado: 74%.

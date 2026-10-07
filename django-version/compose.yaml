@@ -1,0 +1,70 @@
+name: mesa-django-v2
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mesa_mantenimiento
+      POSTGRES_USER: mesa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el entorno}
+    volumes:
+      - mesa_django_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mesa -d mesa_mantenimiento"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  web:
+    build: .
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: mesa_mantenimiento
+      POSTGRES_USER: mesa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el entorno}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Define DJANGO_SECRET_KEY en el entorno}
+      DJANGO_SECRET_KEY_FALLBACKS: ${DJANGO_SECRET_KEY_FALLBACKS:-}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
+      DJANGO_SECURE_COOKIES: ${DJANGO_SECURE_COOKIES:-0}
+      MESA_ADMIN_PASSWORD: ${MESA_ADMIN_PASSWORD:?Define MESA_ADMIN_PASSWORD en el entorno}
+    ports:
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  planner:
+    profiles: ["planner"]
+    build: .
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: mesa_mantenimiento
+      POSTGRES_USER: mesa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el entorno}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Define DJANGO_SECRET_KEY en el entorno}
+      MESA_PLANNER_USER: ${MESA_PLANNER_USER:-}
+      MESA_PLANNER_LOOKBACK_DAYS: ${MESA_PLANNER_LOOKBACK_DAYS:-}
+      MESA_PLANNER_LOOKAHEAD_DAYS: ${MESA_PLANNER_LOOKAHEAD_DAYS:-}
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$$MESA_PLANNER_USER" ] || [ -z "$$MESA_PLANNER_LOOKBACK_DAYS" ] || [ -z "$$MESA_PLANNER_LOOKAHEAD_DAYS" ]; then
+          echo 'Configura MESA_PLANNER_USER y la ventana antes de activar el perfil planner';
+          exit 1;
+        fi
+        while true; do
+          python manage.py plan_preventives --apply --user "$$MESA_PLANNER_USER" --lookback-days "$$MESA_PLANNER_LOOKBACK_DAYS" --lookahead-days "$$MESA_PLANNER_LOOKAHEAD_DAYS"
+          sleep 3600
+        done
+    depends_on:
+      web:
+        condition: service_healthy
+volumes:
+  mesa_django_postgres:
