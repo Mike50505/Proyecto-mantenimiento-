@@ -3,11 +3,11 @@ from django.db import models
 
 
 class User(AbstractUser):
-    ROLES = [(x, x) for x in ("Administrador", "Jefatura", "Técnico", "Solicitante")]
+    ROLES = [(x, x) for x in ("Administrador", "Jefe de mantenimiento", "Jefatura", "Técnico", "Solicitante")]
     employee_number = models.CharField(max_length=50, unique=True)
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150, blank=True)
-    role = models.CharField(max_length=20, choices=ROLES, default="Solicitante")
+    role = models.CharField(max_length=30, choices=ROLES, default="Solicitante")
     must_change_password = models.BooleanField(default=False)
     module_permissions = models.JSONField(default=list, blank=True)
     action_permissions = models.JSONField(default=list, blank=True)

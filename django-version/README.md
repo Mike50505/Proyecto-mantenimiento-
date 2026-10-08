@@ -17,6 +17,12 @@ Para acceso fuera del equipo local, configura `DJANGO_ALLOWED_HOSTS` con el nomb
 
 Al rotar `DJANGO_SECRET_KEY`, puedes pasar la clave anterior en `DJANGO_SECRET_KEY_FALLBACKS` para conservar las sesiones existentes. Retira la clave anterior después del período de sesiones.
 
+## Roles de usuario
+
+En **Usuarios → Crear usuario** o **Administrar → Rol** se puede seleccionar **Jefe de mantenimiento**. Tiene acceso completo como el administrador: tablero, órdenes, activos, preventivos, inventario, catálogos, usuarios, importaciones y auditoría, con todas las acciones y áreas habilitadas. Puede crear usuarios, cambiar roles y restablecer contraseñas. Las cuentas nuevas deben cambiar su contraseña temporal antes de operar.
+
+Operador y Personal de mantenimiento conservan sus accesos actuales. El rol interno Jefatura conserva sus permisos previos. Al cambiar de rol se restablecen los permisos por módulo y acción; el acceso completo del jefe no se puede limitar con permisos personalizados.
+
 ## Comprobaciones
 
 ```powershell

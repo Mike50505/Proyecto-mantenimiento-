@@ -36,7 +36,7 @@ class Command(BaseCommand):
             if not options["user"]:
                 raise CommandError("--apply requiere --user")
             actor = User.objects.filter(username=options["user"], is_active=True).first()
-            if not actor or actor.role not in ("Administrador", "Jefatura") or (actor.role != "Administrador" and not {"preventives.edit", "orders.create"}.issubset(set(actions(actor)))):
+            if not actor or actor.role not in ("Administrador", "Jefatura", "Jefe de mantenimiento") or (actor.role != "Administrador" and not {"preventives.edit", "orders.create"}.issubset(set(actions(actor)))):
                 raise CommandError("El usuario debe ser Administrador o Jefatura activa con permisos preventivos y de OT")
             if actor.must_change_password:
                 raise CommandError("El usuario debe cambiar su contraseña temporal antes de operar")

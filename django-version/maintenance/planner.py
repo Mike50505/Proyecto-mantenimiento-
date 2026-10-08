@@ -5,7 +5,7 @@ from datetime import date
 from django.db import transaction
 
 from .models import PreventivePlan
-from .views import make_occurrence, task_projection
+from .views import effective_areas, make_occurrence, task_projection
 
 
 TERMINAL_ORDER_STATES = {"Completada", "Cancelada"}
@@ -24,7 +24,7 @@ def plan_preventive_window(start, end, *, actor=None, apply=False, allow_overlap
     plan_ids = list(PreventivePlan.objects.filter(asset__administrative_status="Activo").exclude(status__in=("Inactivo", "Cancelado")).order_by("pk").values_list("pk", flat=True))
 
     def process(plan):
-        if actor and actor.area_permissions and plan.asset.area not in actor.area_permissions:
+        if actor and effective_areas(actor) and plan.asset.area not in effective_areas(actor):
             result["skipped_area"] += 1
             return
         result["plans"] += 1

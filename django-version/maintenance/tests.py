@@ -439,7 +439,7 @@ class InterfaceModeContractTests(TestCase):
         from pathlib import Path
 
         script = (Path(__file__).resolve().parent.parent / "static" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("o.status==='Pendiente de validación'&&['Administrador','Jefatura'].includes(state.user.role)", script)
+        self.assertIn("o.status==='Pendiente de validación'&&['Administrador','Jefatura','Jefe de mantenimiento'].includes(state.user.role)", script)
         self.assertIn('class="btn btn-primary validate-order"', script)
         self.assertIn("wrap.querySelector('form .form-actions .btn-primary')", script)
         self.assertNotIn("wrap.querySelector('form .btn-primary').hidden=true", script)

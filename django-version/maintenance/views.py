@@ -26,6 +26,7 @@ from .pdf_documents import render_work_order_pdf, work_order_snapshot
 from .models import Asset, AssetCodeEquivalence, AuditLog, CatalogEntry, ChecklistAnswer, ChecklistItem, DowntimeEvent, FolioSequence, ImportBatch, ImportRow, InventoryItem, InventoryMovement, MaintenanceMaterial, MeterReading, OperationalAlert, PreventiveExecutionEvent, PreventiveOccurrence, PreventivePlan, PreventivePlanRevision, PreventiveTask, PreventiveTemplate, TimeEntry, User, WorkOrder, WorkOrderDocument, WorkOrderEvent
 
 MODULES = ["dashboard", "orders", "assets", "preventives", "inventory", "catalogs", "users", "imports", "audit"]
+ADMIN_ROLES = ("Administrador", "Jefe de mantenimiento")
 ACTIONS = ["orders.create", "orders.read", "orders.edit", "orders.edit_dates", "orders.assign", "orders.transition", "orders.validate", "orders.time", "assets.read", "assets.edit", "preventives.read", "preventives.edit", "inventory.read", "inventory.move", "inventory.adjust", "catalogs.manage", "users.manage", "audit.read"]
 ROLE_MODULES = {"Administrador": MODULES, "Jefatura": [x for x in MODULES if x not in ("users", "imports")], "Técnico": [x for x in MODULES if x not in ("users", "imports", "catalogs", "audit")], "Solicitante": ["orders"]}
 ROLE_ACTIONS = {
@@ -34,6 +35,15 @@ ROLE_ACTIONS = {
     "Técnico": ["orders.read", "orders.edit", "orders.transition", "orders.time", "assets.read", "preventives.read", "inventory.read"],
     "Solicitante": ["orders.create", "orders.read"],
 }
+ROLE_MODULES["Jefe de mantenimiento"] = MODULES
+ROLE_ACTIONS["Jefe de mantenimiento"] = ACTIONS
+
+
+def user_role(value):
+    roles = {"Operador": "Solicitante", "Solicitante": "Solicitante", "Mantenimiento": "Técnico", "Técnico": "Técnico", "Jefatura": "Jefatura", "Jefe de mantenimiento": "Jefe de mantenimiento"}
+    if value not in roles:
+        raise ApiError("Selecciona un rol válido")
+    return roles[value]
 
 
 class ApiError(Exception):
@@ -118,11 +128,17 @@ def require_catalog_value(kind, value):
     if value not in catalog_values(kind): raise ApiError(f"{kind}: selecciona un valor activo del catálogo")
 
 
+def effective_areas(user):
+    return [] if user.role == "Jefe de mantenimiento" else user.area_permissions
+
+
 def modules(user):
+    if user.role in ADMIN_ROLES: return MODULES
     return user.module_permissions or ROLE_MODULES.get(user.role, [])
 
 
 def actions(user):
+    if user.role in ADMIN_ROLES: return ACTIONS
     return user.action_permissions or ROLE_ACTIONS.get(user.role, [])
 
 
@@ -131,15 +147,15 @@ def require(request, action=None, area=None, allow_password_change=False):
         raise ApiError("Sesión requerida", 401)
     if request.user.must_change_password and not allow_password_change:
         raise ApiError("Debes cambiar tu contraseña temporal antes de continuar", 403)
-    if action and request.user.role != "Administrador" and action not in actions(request.user):
+    if action and request.user.role not in ADMIN_ROLES and action not in actions(request.user):
         raise ApiError("Tu usuario no tiene permiso para esta acción", 403)
-    if area is not None and request.user.area_permissions and area not in request.user.area_permissions:
+    if area is not None and effective_areas(request.user) and area not in effective_areas(request.user):
         raise ApiError("Tu usuario no tiene permiso para esta área", 403)
     return request.user
 
 
 def public_user(user):
-    return {"id": user.id, "employee_number": user.employee_number, "name": user.first_name, "last_name": user.last_name, "username": user.username, "role": user.role, "role_name": "Operador" if user.role == "Solicitante" else user.role, "permissions": modules(user), "actions": actions(user), "areas": user.area_permissions, "must_change_password": user.must_change_password}
+    return {"id": user.id, "employee_number": user.employee_number, "name": user.first_name, "last_name": user.last_name, "username": user.username, "role": user.role, "role_name": "Operador" if user.role == "Solicitante" else user.role, "permissions": modules(user), "actions": actions(user), "areas": effective_areas(user), "must_change_password": user.must_change_password}
 
 
 def audit(user, entity, entity_id, action, before=None, after=None, reason=""):
@@ -178,9 +194,9 @@ def dashboard_api(request):
     open_qs = qs.exclude(status__in=["Completada", "Cancelada"])
     assets = Asset.objects.all()
     plans = PreventivePlan.objects.all()
-    if user.area_permissions:
-        assets = assets.filter(area__in=user.area_permissions)
-        plans = plans.filter(asset__area__in=user.area_permissions)
+    if effective_areas(user):
+        assets = assets.filter(area__in=effective_areas(user))
+        plans = plans.filter(asset__area__in=effective_areas(user))
     recent = [order_dict(x) for x in qs.order_by("-requested_at")[:6]]
     urgent = [order_dict(x) for x in open_qs.filter(priority="Paro de máquina").order_by("-requested_at")[:6]]
     totals = qs.aggregate(labor_hours=Sum("labor_hours"))
@@ -221,9 +237,9 @@ def sync_operational_alerts(user):
     assets = Asset.objects.filter(operational_status="Parada")
     plans = PreventivePlan.objects.filter(next_date__lte=timezone.localdate()).select_related("asset")
     orders = order_queryset(user).exclude(status__in=["Completada", "Cancelada"]).filter(priority="Paro de mÃ¡quina").select_related("asset")
-    if user.area_permissions:
-        assets = assets.filter(area__in=user.area_permissions)
-        plans = plans.filter(asset__area__in=user.area_permissions)
+    if effective_areas(user):
+        assets = assets.filter(area__in=effective_areas(user))
+        plans = plans.filter(asset__area__in=effective_areas(user))
     for item in assets:
         key = f"asset_stopped:{item.id}"
         sources[key] = {"kind":"asset_stopped", "source_id":item.id, "area":item.area, "title":f"Activo en parada: {item.code} Â· {item.name}", "detail":item.operational_status_cause or "Causa pendiente", "severity":"CrÃ­tica" if item.critical else "Alta"}
@@ -252,8 +268,8 @@ def sync_operational_alerts(user):
                 for field, value in data.items(): setattr(alert, field, value)
                 alert.save()
     stale = OperationalAlert.objects.filter(status__in=["Abierta", "Atendida"])
-    if user.area_permissions:
-        stale = stale.filter(Q(area__in=user.area_permissions) | Q(area="", kind="low_stock"))
+    if effective_areas(user):
+        stale = stale.filter(Q(area__in=effective_areas(user)) | Q(area="", kind="low_stock"))
     stale.exclude(source_key__in=current).update(status="Cerrada", updated_at=now)
 
 
@@ -266,8 +282,8 @@ def operational_alerts_api(request):
     if user.role == "Solicitante": raise ApiError("Tu usuario no tiene permiso para ver alertas", 403)
     sync_operational_alerts(user)
     qs = OperationalAlert.objects.filter(status__in=["Abierta", "Atendida"])
-    if user.area_permissions:
-        qs = qs.filter(Q(area__in=user.area_permissions) | Q(area="", kind="low_stock"))
+    if effective_areas(user):
+        qs = qs.filter(Q(area__in=effective_areas(user)) | Q(area="", kind="low_stock"))
     if request.method == "GET": return JsonResponse({"alerts":[alert_dict(x) for x in qs.select_related("handled_by")]})
     if request.method != "POST": raise ApiError("MÃ©todo no permitido", 405)
     data = payload(request)
@@ -287,8 +303,8 @@ def operational_alerts_xlsx(request):
     if user.role == "Solicitante": raise ApiError("Tu usuario no tiene permiso para exportar alertas", 403)
     sync_operational_alerts(user)
     rows = OperationalAlert.objects.filter(status__in=["Abierta", "Atendida"])
-    if user.area_permissions:
-        rows = rows.filter(Q(area__in=user.area_permissions) | Q(area="", kind="low_stock"))
+    if effective_areas(user):
+        rows = rows.filter(Q(area__in=effective_areas(user)) | Q(area="", kind="low_stock"))
     headers = ["Severidad", "Alerta", "Detalle", "Área", "Estado", "Nota de atención", "Atendió", "Fecha de atención", "Última actualización"]
     data = []
     for alert in rows.select_related("handled_by").order_by("status", "-updated_at", "id"):
@@ -402,7 +418,7 @@ def dispatch(request, path):
     if path == "/api/catalogs" and method == "GET":
         user = require(request)
         users = [public_user(x) | {"name": x.first_name} for x in User.objects.filter(is_active=True)] if user.role != "Solicitante" else [public_user(user) | {"name": user.first_name}]
-        assets = [asset_dict(x) for x in Asset.objects.filter(administrative_status="Activo") if not user.area_permissions or x.area in user.area_permissions]
+        assets = [asset_dict(x) for x in Asset.objects.filter(administrative_status="Activo") if not effective_areas(user) or x.area in effective_areas(user)]
         return JsonResponse({"users": users, "assets": assets, "priorities": catalog_values("priority"), "classifications": catalog_values("classification"), "specialties": catalog_values("specialty"), "areas": catalog_values("area"), "lines": catalog_values("line"), "shifts": catalog_values("shift")})
     if path == "/api/catalog-entries": return catalog_entries_api(request)
     if path.startswith("/api/catalog-entries/"): return catalog_entry_api(request, int(path.rsplit("/", 1)[1]))
@@ -1074,7 +1090,7 @@ def users_api(request):
     if request.method == "GET": return JsonResponse([public_user(x) | {"active": x.is_active, "created_at": iso(x.date_joined)} for x in User.objects.all()], safe=False)
     data = payload(request); password = str(data.get("password", ""))
     if len(password) < 8: raise ApiError("La contraseña debe tener al menos 8 caracteres")
-    created = User.objects.create_user(username=data.get("username") or data["employee_number"], password=password, employee_number=data["employee_number"], first_name=data["name"], last_name=data["last_name"], role="Técnico" if data.get("role") == "Mantenimiento" else "Solicitante", must_change_password=True)
+    created = User.objects.create_user(username=data.get("username") or data["employee_number"], password=password, employee_number=data["employee_number"], first_name=data["name"], last_name=data["last_name"], role=user_role(data.get("role", "Operador")), must_change_password=True)
     audit(user, "user", created.id, "created", after={"role": created.role, "active": created.is_active, "actions": actions(created), "areas": created.area_permissions, "must_change_password": created.must_change_password}); return JsonResponse({"id": created.id, "username": created.username}, status=201)
 
 
@@ -1083,7 +1099,12 @@ def user_api(request, pk):
     before = {"role": target.role, "active": target.is_active, "actions": actions(target), "areas": target.area_permissions, "must_change_password": target.must_change_password}
     password_reset = False
     if "active" in data and target.username != "administrator": target.is_active = bool(data["active"])
-    if data.get("role") and target.role != "Administrador": target.role = "Técnico" if data["role"] == "Mantenimiento" else "Solicitante"
+    if data.get("role") and target.role != "Administrador":
+        new_role = user_role(data["role"])
+        if new_role != target.role:
+            target.module_permissions = []
+            target.action_permissions = []
+        target.role = new_role
     if data.get("password"):
         if len(str(data["password"])) < 8: raise ApiError("La contraseña debe tener al menos 8 caracteres")
         target.set_password(data["password"])
@@ -1091,14 +1112,18 @@ def user_api(request, pk):
         password_reset = True
     if isinstance(data.get("actions"), list): target.action_permissions = data["actions"]
     if isinstance(data.get("areas"), list): target.area_permissions = data["areas"]
+    if target.role == "Jefe de mantenimiento":
+        target.module_permissions = []
+        target.action_permissions = []
+        target.area_permissions = []
     target.save(); audit(actor, "user", target.id, "updated", before=before, after={"role": target.role, "active": target.is_active, "actions": actions(target), "areas": target.area_permissions, "must_change_password": target.must_change_password, "password_reset": password_reset}); return JsonResponse({"ok": True})
 
 
 def assets_xlsx(request):
     user = require(request, "assets.read")
     rows = Asset.objects.all().order_by("code")
-    if user.area_permissions:
-        rows = rows.filter(area__in=user.area_permissions)
+    if effective_areas(user):
+        rows = rows.filter(area__in=effective_areas(user))
     query = request.GET.get("q", "").strip()
     if query:
         rows = rows.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(original_code__icontains=query) | Q(alias_codes__icontains=query) | Q(area__icontains=query) | Q(brand__icontains=query))
@@ -1112,7 +1137,7 @@ def assets_xlsx(request):
 
 def assets_api(request):
     user = require(request, "assets.read" if request.method == "GET" else "assets.edit")
-    if request.method == "GET": return JsonResponse([asset_dict(a) for a in Asset.objects.prefetch_related("code_equivalences") if not user.area_permissions or a.area in user.area_permissions], safe=False)
+    if request.method == "GET": return JsonResponse([asset_dict(a) for a in Asset.objects.prefetch_related("code_equivalences") if not effective_areas(user) or a.area in effective_areas(user)], safe=False)
     data = payload(request); require(request, "assets.edit", data.get("area") or "")
     data["code"] = checked_asset_code(data.get("code"))
     if catalog_values("area"): require_catalog_value("area", data.get("area"))
@@ -1339,8 +1364,8 @@ def inventory_xlsx(request):
 def preventives_xlsx(request):
     user = require(request, "preventives.read")
     plans = PreventivePlan.objects.select_related("asset", "responsible", "work_order").order_by("next_date", "asset__code", "title")
-    if user.area_permissions:
-        plans = plans.filter(asset__area__in=user.area_permissions)
+    if effective_areas(user):
+        plans = plans.filter(asset__area__in=effective_areas(user))
     headers = ["Próxima fecha", "Código activo", "Activo", "Área", "Actividad", "Código plantilla", "Aplica cuando", "Frecuencia", "Responsable", "Estado", "Versión", "Folio OT"]
     rows = [[p.next_date, p.asset.code, p.asset.name, p.asset.area, p.title, p.template_code, p.applies_when, p.frequency, p.responsible.first_name if p.responsible else "", p.status, p.version, p.work_order.folio if p.work_order_id else ""] for p in plans]
     content = make_workbook("Programa preventivo", headers, rows, date_columns={1})
@@ -1443,7 +1468,7 @@ def movement_api(request, pk):
 def order_queryset(user):
     qs = WorkOrder.objects.select_related("requester", "technician", "asset")
     if user.role == "Solicitante": return qs.filter(requester=user)
-    if user.area_permissions: return qs.filter(Q(asset__area__in=user.area_permissions) | Q(asset__isnull=True, location__in=user.area_permissions))
+    if effective_areas(user): return qs.filter(Q(asset__area__in=effective_areas(user)) | Q(asset__isnull=True, location__in=effective_areas(user)))
     return qs
 
 
@@ -1510,7 +1535,7 @@ def orders_api(request):
     if user.role != "Solicitante" and data.get("technician_id"):
         require(request, "orders.assign")
         technician_id = data["technician_id"]
-        if not User.objects.filter(pk=technician_id, is_active=True, role__in=["Técnico", "Jefatura"]).exists():
+        if not User.objects.filter(pk=technician_id, is_active=True, role__in=["Técnico", "Jefatura", "Jefe de mantenimiento"]).exists():
             raise ApiError("El responsable no es un técnico activo")
     if user.role != "Solicitante" and data.get("status", "Abierta") != "Abierta":
         raise ApiError("Las órdenes nuevas deben iniciar abiertas; cambia el estado después de crearlas")
@@ -1571,7 +1596,7 @@ def order_api(request, pk):
         technician_changed = technician_id != order.technician_id
         if technician_changed:
             require(request, "orders.assign")
-        if technician_id and not User.objects.filter(pk=technician_id, is_active=True, role__in=["Técnico", "Jefatura"]).exists():
+        if technician_id and not User.objects.filter(pk=technician_id, is_active=True, role__in=["Técnico", "Jefatura", "Jefe de mantenimiento"]).exists():
             raise ApiError("El responsable no es un técnico activo")
         if technician_changed: order.technician_id = technician_id
     participant_ids = None
@@ -1582,7 +1607,7 @@ def order_api(request, pk):
             participant_ids = {int(value) for value in data["participant_ids"]}
         except (TypeError, ValueError):
             raise ApiError("Colaboradores inválidos")
-        valid = set(User.objects.filter(pk__in=participant_ids, is_active=True, role__in=["Técnico", "Jefatura"]).values_list("id", flat=True))
+        valid = set(User.objects.filter(pk__in=participant_ids, is_active=True, role__in=["Técnico", "Jefatura", "Jefe de mantenimiento"]).values_list("id", flat=True))
         if valid != participant_ids: raise ApiError("Selecciona colaboradores activos de Mantenimiento")
         previous_ids = set(order.participants.values_list("id", flat=True))
         participant_changed = (participant_ids - {order.technician_id}) != previous_ids
@@ -1924,7 +1949,7 @@ def preventives_api(request):
     user = require(request, "preventives.read" if request.method == "GET" else "preventives.edit")
     if request.method == "GET":
         rows = PreventivePlan.objects.select_related("asset", "responsible")
-        return JsonResponse([{"id": p.id, "asset_id": p.asset_id, "asset_name": p.asset.name, "asset_code": p.asset.code, "asset_area": p.asset.area, "title": p.title, "frequency": p.frequency, "next_date": p.next_date.isoformat(), "responsible_id": p.responsible_id, "responsible_name": p.responsible.first_name if p.responsible else None, "status": p.status, "work_order_id": p.work_order_id, "version": p.version, "template_code": p.template_code, "instructions": p.instructions, "applies_when": p.applies_when} for p in rows if not user.area_permissions or p.asset.area in user.area_permissions], safe=False)
+        return JsonResponse([{"id": p.id, "asset_id": p.asset_id, "asset_name": p.asset.name, "asset_code": p.asset.code, "asset_area": p.asset.area, "title": p.title, "frequency": p.frequency, "next_date": p.next_date.isoformat(), "responsible_id": p.responsible_id, "responsible_name": p.responsible.first_name if p.responsible else None, "status": p.status, "work_order_id": p.work_order_id, "version": p.version, "template_code": p.template_code, "instructions": p.instructions, "applies_when": p.applies_when} for p in rows if not effective_areas(user) or p.asset.area in effective_areas(user)], safe=False)
     data = payload(request); asset = get_object_or_404(Asset, pk=data["asset_id"]); require(request, "preventives.edit", asset.area); plan = PreventivePlan.objects.create(asset=asset, title=data["title"], frequency=data["frequency"], next_date=data["next_date"], responsible_id=data.get("responsible_id") or None, status=data.get("status", "Programado"), template_code=data.get("template_code", ""), instructions=data.get("instructions", ""), applies_when=data.get("applies_when", "")); save_revision(plan, user, "created"); audit(user, "preventive_plan", plan.id, "created"); return JsonResponse({"id": plan.id, "version": 1}, status=201)
 
 
@@ -2105,9 +2130,9 @@ def preventive_calendar_api(request):
         raise ApiError("El período es inválido o supera 366 días")
     plans = PreventivePlan.objects.select_related("asset").prefetch_related("tasks", "occurrences__work_order", "occurrences__execution_events")
     assets = Asset.objects.filter(administrative_status="Activo")
-    if user.area_permissions:
-        plans = plans.filter(asset__area__in=user.area_permissions)
-        assets = assets.filter(area__in=user.area_permissions)
+    if effective_areas(user):
+        plans = plans.filter(asset__area__in=effective_areas(user))
+        assets = assets.filter(area__in=effective_areas(user))
     rows = []
     configured_asset_ids = set()
     incomplete = []
@@ -2226,7 +2251,7 @@ def meter_api(request, pk):
 @transaction.atomic
 def downtime_api(request):
     user = require(request, "orders.read" if request.method == "GET" else "orders.transition")
-    if request.method == "GET": return JsonResponse([{"id": x.id, "asset_id": x.asset_id, "asset_name": x.asset.name, "asset_code": x.asset.code, "cause": x.cause, "started_at": iso(x.started_at), "finished_at": iso(x.finished_at), "order_count": x.work_orders.count(), "work_order_ids": list(x.work_orders.values_list("id", flat=True))} for x in DowntimeEvent.objects.select_related("asset") if not user.area_permissions or x.asset.area in user.area_permissions], safe=False)
+    if request.method == "GET": return JsonResponse([{"id": x.id, "asset_id": x.asset_id, "asset_name": x.asset.name, "asset_code": x.asset.code, "cause": x.cause, "started_at": iso(x.started_at), "finished_at": iso(x.finished_at), "order_count": x.work_orders.count(), "work_order_ids": list(x.work_orders.values_list("id", flat=True))} for x in DowntimeEvent.objects.select_related("asset") if not effective_areas(user) or x.asset.area in effective_areas(user)], safe=False)
     if request.method != "POST": raise ApiError("Método no permitido", 405)
     data = payload(request)
     asset = get_object_or_404(Asset.objects.select_for_update(), pk=data.get("asset_id"))
@@ -2252,8 +2277,8 @@ def downtime_api(request):
 def downtime_xlsx(request):
     user = require(request, "orders.read")
     events = DowntimeEvent.objects.select_related("asset", "created_by", "closed_by").prefetch_related("work_orders").order_by("-started_at", "-id")
-    if user.area_permissions:
-        events = events.filter(asset__area__in=user.area_permissions)
+    if effective_areas(user):
+        events = events.filter(asset__area__in=effective_areas(user))
     headers = ["Activo", "Código", "Área", "Causa", "Inicio", "Fin", "Estado", "OT relacionadas", "Registró", "Cerró", "Motivo de cierre"]
     rows = []
     for event in events:
@@ -2290,14 +2315,14 @@ def downtime_item_api(request, pk):
 
 
 def agenda_api(request):
-    user = require(request, "orders.read"); orders = order_queryset(user).exclude(status__in=["Completada", "Cancelada"]); technicians = User.objects.filter(role__in=["Técnico", "Jefatura"], is_active=True)
+    user = require(request, "orders.read"); orders = order_queryset(user).exclude(status__in=["Completada", "Cancelada"]); technicians = User.objects.filter(role__in=["Técnico", "Jefatura", "Jefe de mantenimiento"], is_active=True)
     return JsonResponse({"orders": [order_dict(x) for x in orders], "technicians": [public_user(x) for x in technicians]})
 
 
 def audit_queryset(request, user):
     rows = AuditLog.objects.select_related("user")
-    if user.area_permissions:
-        areas = user.area_permissions
+    if effective_areas(user):
+        areas = effective_areas(user)
         assets = Asset.objects.filter(area__in=areas).values("id")
         orders = WorkOrder.objects.filter(Q(asset__area__in=areas) | Q(asset__isnull=True, location__in=areas)).values("id")
         plans = PreventivePlan.objects.filter(asset__area__in=areas).values("id")
