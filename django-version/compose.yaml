@@ -29,7 +29,7 @@ services:
       DJANGO_SECURE_COOKIES: ${DJANGO_SECURE_COOKIES:-0}
       MESA_ADMIN_PASSWORD: ${MESA_ADMIN_PASSWORD:?Define MESA_ADMIN_PASSWORD en el entorno}
     ports:
-      - "8001:8000"
+      - "${MESA_BIND_ADDRESS:-127.0.0.1}:${MESA_PORT:-8001}:8000"
     depends_on:
       db:
         condition: service_healthy

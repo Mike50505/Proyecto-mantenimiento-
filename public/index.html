@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#F5F5F7">
   <title>MESA · Mantenimiento Planta Ramos</title>
+  <link rel="icon" href="/logo-mesa.svg" type="image/svg+xml">
   <script>document.documentElement.dataset.theme=localStorage.getItem('mesa-theme')||'dark';</script>
   <link rel="stylesheet" href="/styles.css?v=20260908-1">
   <link rel="stylesheet" href="/mesa.css?v=20260909-2">
+  <link rel="stylesheet" href="/logo.css?v=1">
 </head>
 <body>
   <a class="skip-link" href="#content">Ir al contenido</a>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand"><span class="brand-mark">M</span><div><strong>MESA</strong><small>Planta Ramos</small></div></div>
+      <div class="brand"><img class="brand-logo" src="/logo-mesa.svg" alt="MESA"><div><strong>Mantenimiento</strong><small>Planta Ramos</small></div></div>
       <nav id="nav">
         <button class="nav-item active" data-view="dashboard"><span>⌂</span> Panel general</button>
         <button class="nav-item" data-view="orders"><span>≡</span> Órdenes de trabajo</button>
@@ -42,7 +44,7 @@
   </div>
   <div class="login-screen" id="login-screen">
     <form class="login-card" id="login-form">
-      <div class="login-logo">M</div><h1>MESA Mantenimiento</h1><p>Planta Ramos · Acceso al sistema</p>
+      <div class="login-logo"><img src="/logo-mesa.svg" alt="MESA"></div><h1>MESA Mantenimiento</h1><p>Planta Ramos · Acceso al sistema</p>
       <label>Usuario<input name="username" autocomplete="username" required autofocus></label>
       <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
       <div class="login-error" id="login-error"></div><button class="btn btn-primary">Iniciar sesión</button>
