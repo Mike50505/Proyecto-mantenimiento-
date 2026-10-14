@@ -12,6 +12,7 @@ class User(AbstractUser):
     module_permissions = models.JSONField(default=list, blank=True)
     action_permissions = models.JSONField(default=list, blank=True)
     area_permissions = models.JSONField(default=list, blank=True)
+    custom_permissions = models.BooleanField(default=False)
 
     @property
     def name(self):

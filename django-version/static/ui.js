@@ -33,7 +33,7 @@ const MesaUI = (() => {
     wrap.addEventListener('keydown',e=>{
       if(e.key==='Escape'){e.preventDefault();close();return;}
       if(e.key!=='Tab')return;
-      const focusable=[...wrap.querySelectorAll('button,input:not([type=hidden]),select,textarea,a[href],[tabindex="0"]')].filter(el=>!el.disabled&&el.getClientRects().length);
+      const focusable=[...wrap.querySelectorAll('button,input:not([type=hidden]),select,textarea,a[href],[tabindex="0"]')].filter(el=>!el.disabled&&!el.matches('.glide-native-select,[aria-hidden="true"]')&&el.getClientRects().length);
       const first=focusable[0],last=focusable.at(-1);
       if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
       else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
@@ -41,7 +41,7 @@ const MesaUI = (() => {
     // Also restore the page after existing business actions remove their dialog.
     const removal=new MutationObserver(()=>{if(!wrap.isConnected){removal.disconnect();shell.inert=!document.querySelector('#login-screen').classList.contains('hidden')||!!document.querySelector('.modal-backdrop');document.body.style.overflow=document.querySelector('.modal-backdrop')?'hidden':oldOverflow;}});
     removal.observe(document.body,{childList:true});
-    decorate(wrap);requestAnimationFrame(()=>[...wrap.querySelectorAll('input:not([type=hidden]):not(:disabled),select,textarea,button')].find(el=>el.getClientRects().length)?.focus());
+    decorate(wrap);requestAnimationFrame(()=>[...wrap.querySelectorAll('input:not([type=hidden]):not(:disabled),select,textarea,button')].find(el=>!el.matches('.glide-native-select,[aria-hidden="true"]')&&el.getClientRects().length)?.focus());
     return close;
   }
   const navNames={dashboard:'home',orders:'orders',assets:'assets',inventory:'inventory',preventives:'calendar',users:'users'};
@@ -53,9 +53,8 @@ const MesaUI = (() => {
   const logout=document.querySelector('#logout');logout.innerHTML=icon('logout');logout.setAttribute('aria-label','Cerrar sesión');
   document.querySelector('#mobile-logout').innerHTML=`${icon('logout')}<span>Salir</span>`;
   const notification=document.querySelector('#notification');notification.firstChild.replaceWith(document.createRange().createContextualFragment(icon('bell')));
-  const themeToggle=document.querySelector('#theme-toggle');
-  const paintTheme=()=>{const dark=document.documentElement.dataset.theme==='dark';themeToggle.innerHTML=icon(dark?'sun':'moon');themeToggle.setAttribute('aria-label',dark?'Cambiar a modo claro':'Cambiar a modo oscuro');themeToggle.title=dark?'Modo claro':'Modo oscuro';document.querySelector('meta[name="theme-color"]').content=dark?'#111827':'#F5F5F7';};
-  themeToggle.onclick=()=>{const next=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=next;localStorage.setItem('mesa-theme',next);paintTheme();};paintTheme();
+  const paintTheme=()=>{document.querySelector('meta[name="theme-color"]').content=document.documentElement.dataset.theme==='dark'?'#000000':'#f0f5fc';};
+  paintTheme();new MutationObserver(paintTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
   document.querySelector('#fab-new-order')?.removeAttribute('hidden');
   document.querySelector('#more-nav').onclick=()=>document.querySelector('#sidebar').classList.toggle('open');
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.querySelector('.modal-backdrop')){document.querySelector('#sidebar').classList.remove('open');menu.focus();}});

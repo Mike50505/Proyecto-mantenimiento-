@@ -1,0 +1,24 @@
+@media screen {
+html body.mesa-maintenance .sidebar.mesa-header { min-height:64px; height:auto; padding:12px 24px; position:sticky; left:auto; bottom:auto; gap:16px; }
+html body.mesa-maintenance .sidebar .app-version { display:none; }
+html body.mesa-maintenance #nav.mesa-nav { display:flex; flex-direction:row; gap:7px; }
+html body.mesa-maintenance .sidebar-foot.mesa-account { margin:0 0 0 auto; padding:0; border:0; }
+html body.mesa-maintenance .mesa-nav button>span { display:none; }
+html body.mesa-maintenance .app-shell > main { --maintenance-content-max:1440px; --maintenance-content-gutter:clamp(18px,4vw,58px); }
+html body.mesa-maintenance .content { max-width:var(--maintenance-content-max); padding-inline:var(--maintenance-content-gutter); }
+html body.mesa-maintenance .topbar.mesa-page-heading { position:static; height:auto; min-height:130px; width:calc(100% - 2 * var(--maintenance-content-gutter)); max-width:calc(var(--maintenance-content-max) - 2 * var(--maintenance-content-gutter)); min-width:0; margin:32px auto 0; padding:28px 32px; }
+html body.mesa-maintenance .topbar.mesa-page-heading h1 { font-size:clamp(28px,3vw,40px); }
+html body.mesa-maintenance .topbar .today { color:#e4f1ff; }
+html body.mesa-maintenance .topbar-logout, html body.mesa-maintenance .bottom-nav { display:none; }
+html body.mesa-maintenance .login-screen { background:var(--mesa-bg); overflow-y:auto; }
+html body.mesa-maintenance .login-screen .mesa-login { min-height:100dvh; }
+html body.mesa-maintenance #password-change-screen .login-card { max-width:460px; }
+html body.mesa-maintenance .login-card label { display:grid; gap:8px; }
+html body.mesa-maintenance .login-card h1 { margin:18px 0 8px; }
+html body.mesa-maintenance .login-card>p { margin-bottom:24px; }
+html body.mesa-maintenance .login-card input { margin:0; }
+html body.mesa-maintenance .operation-card { border-color:var(--mesa-line); }
+@media(max-width:800px){html body.mesa-maintenance .app-shell > main{--maintenance-content-gutter:18px}html body.mesa-maintenance .sidebar.mesa-header{padding:10px 18px}html body.mesa-maintenance .content{padding-bottom:88px}html body.mesa-maintenance .topbar.mesa-page-heading{padding:24px;margin-top:24px}html body.mesa-maintenance .fab-btn{bottom:20px}html body.mesa-maintenance .topbar p{display:block}}
+@media(max-width:800px){html body.mesa-maintenance #nav.mesa-nav{display:none;flex-direction:column}html body.mesa-maintenance .mesa-header.open #nav.mesa-nav{display:flex}}
+
+}

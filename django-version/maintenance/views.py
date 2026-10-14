@@ -25,7 +25,7 @@ from .pdf_documents import render_work_order_pdf, work_order_snapshot
 
 from .models import Asset, AssetCodeEquivalence, AuditLog, CatalogEntry, ChecklistAnswer, ChecklistItem, DowntimeEvent, FolioSequence, ImportBatch, ImportRow, InventoryItem, InventoryMovement, MaintenanceMaterial, MeterReading, OperationalAlert, PreventiveExecutionEvent, PreventiveOccurrence, PreventivePlan, PreventivePlanRevision, PreventiveTask, PreventiveTemplate, TimeEntry, User, WorkOrder, WorkOrderDocument, WorkOrderEvent
 
-MODULES = ["dashboard", "orders", "assets", "preventives", "inventory", "catalogs", "users", "imports", "audit"]
+MODULES = ["dashboard", "orders", "assets", "preventives", "inventory", "catalogs", "users", "imports", "audit", "downtime"]
 ADMIN_ROLES = ("Administrador", "Jefe de mantenimiento")
 ACTIONS = ["orders.create", "orders.read", "orders.edit", "orders.edit_dates", "orders.assign", "orders.transition", "orders.validate", "orders.time", "assets.read", "assets.edit", "preventives.read", "preventives.edit", "inventory.read", "inventory.move", "inventory.adjust", "catalogs.manage", "users.manage", "audit.read"]
 ROLE_MODULES = {"Administrador": MODULES, "Jefatura": [x for x in MODULES if x not in ("users", "imports")], "Técnico": [x for x in MODULES if x not in ("users", "imports", "catalogs", "audit")], "Solicitante": ["orders"]}
@@ -129,15 +129,20 @@ def require_catalog_value(kind, value):
 
 
 def effective_areas(user):
-    return [] if user.role == "Jefe de mantenimiento" else user.area_permissions
+    return [] if user.role == "Administrador" or (user.role == "Jefe de mantenimiento" and not user.custom_permissions) else user.area_permissions
 
 
 def modules(user):
+    if user.role == "Administrador": return MODULES
+    if user.custom_permissions: return user.module_permissions
     if user.role in ADMIN_ROLES: return MODULES
-    return user.module_permissions or ROLE_MODULES.get(user.role, [])
+    selected = user.module_permissions or ROLE_MODULES.get(user.role, [])
+    return list(dict.fromkeys([*selected, "downtime"])) if "orders" in selected and user.role != "Solicitante" else selected
 
 
 def actions(user):
+    if user.role == "Administrador": return ACTIONS
+    if user.custom_permissions: return user.action_permissions
     if user.role in ADMIN_ROLES: return ACTIONS
     return user.action_permissions or ROLE_ACTIONS.get(user.role, [])
 
@@ -147,7 +152,7 @@ def require(request, action=None, area=None, allow_password_change=False):
         raise ApiError("Sesión requerida", 401)
     if request.user.must_change_password and not allow_password_change:
         raise ApiError("Debes cambiar tu contraseña temporal antes de continuar", 403)
-    if action and request.user.role not in ADMIN_ROLES and action not in actions(request.user):
+    if action and action not in actions(request.user):
         raise ApiError("Tu usuario no tiene permiso para esta acción", 403)
     if area is not None and effective_areas(request.user) and area not in effective_areas(request.user):
         raise ApiError("Tu usuario no tiene permiso para esta área", 403)
@@ -155,7 +160,59 @@ def require(request, action=None, area=None, allow_password_change=False):
 
 
 def public_user(user):
-    return {"id": user.id, "employee_number": user.employee_number, "name": user.first_name, "last_name": user.last_name, "username": user.username, "role": user.role, "role_name": "Operador" if user.role == "Solicitante" else user.role, "permissions": modules(user), "actions": actions(user), "areas": effective_areas(user), "must_change_password": user.must_change_password}
+    return {"id": user.id, "employee_number": user.employee_number, "name": user.first_name, "last_name": user.last_name, "username": user.username, "role": user.role, "role_name": "Operador" if user.role == "Solicitante" else user.role, "permissions": modules(user), "actions": actions(user), "areas": effective_areas(user), "must_change_password": user.must_change_password, "custom_permissions": user.custom_permissions}
+
+
+def permission_module(path):
+    if path in {"/api/dashboard", "/api/dashboard/export.xlsx"} or path.startswith("/api/alerts"):
+        return "dashboard"
+    if path == "/api/agenda" or path.startswith("/api/downtime-events"):
+        return "downtime"
+    if path.startswith("/api/catalog-entries"): return "catalogs"
+    for prefix, module in (("/api/users", "users"), ("/api/user-permission-options", "users"),
+                           ("/api/assets", "assets"), ("/api/inventory", "inventory"),
+                           ("/api/orders", "orders"), ("/api/preventive", "preventives"),
+                           ("/api/imports", "imports"), ("/api/audit", "audit")):
+        if path.startswith(prefix): return module
+    return None
+
+
+def permission_options_api(request):
+    require(request, "users.manage")
+    areas = set(catalog_values("area")) | set(Asset.objects.exclude(area="").values_list("area", flat=True))
+    for user in User.objects.all():
+        areas.update(user.area_permissions)
+    return JsonResponse({"modules": MODULES, "actions": ACTIONS,
+                         "areas": sorted(areas, key=str.casefold),
+                         "defaults": {role: {"permissions": ROLE_MODULES[role], "actions": ROLE_ACTIONS[role]}
+                                      for role in ROLE_MODULES}})
+
+
+def configure_user_permissions(target, data):
+    if "custom_permissions" in data and type(data["custom_permissions"]) is not bool:
+        raise ApiError("Indica si la cuenta usará permisos personalizados")
+    custom = data.get("custom_permissions", target.custom_permissions)
+    if target.role == "Administrador" and custom:
+        raise ApiError("El administrador principal conserva acceso completo")
+    for key, allowed, field in (("permissions", MODULES, "module_permissions"),
+                                ("actions", ACTIONS, "action_permissions"),
+                                ("areas", None, "area_permissions")):
+        if key not in data: continue
+        selected = data[key]
+        if not isinstance(selected, list) or len(selected) > 200 or any(
+                not isinstance(value, str) or not value.strip() or len(value) > 120
+                or (allowed is not None and value not in allowed) for value in selected):
+            raise ApiError("La selección de ventanas, acciones o áreas es inválida")
+        setattr(target, field, list(dict.fromkeys(selected)))
+    target.custom_permissions = custom
+    if "custom_permissions" in data and not custom:
+        target.module_permissions = []
+        target.action_permissions = []
+        target.area_permissions = []
+    if target.role == "Jefe de mantenimiento" and not custom:
+        target.module_permissions = []
+        target.action_permissions = []
+        target.area_permissions = []
 
 
 def audit(user, entity, entity_id, action, before=None, after=None, reason=""):
@@ -188,7 +245,7 @@ def dashboard_orders(request, user):
 
 def dashboard_api(request):
     user = require(request, "orders.read")
-    if user.role == "Solicitante": raise ApiError("Tu usuario no tiene permiso para ver el tablero", 403)
+    if user.role == "Solicitante" and not user.custom_permissions: raise ApiError("Tu usuario no tiene permiso para ver el tablero", 403)
     qs = dashboard_orders(request, user)
     sync_operational_alerts(user)
     open_qs = qs.exclude(status__in=["Completada", "Cancelada"])
@@ -225,7 +282,7 @@ def dashboard_api(request):
 
 def dashboard_xlsx(request):
     user = require(request, "orders.read")
-    if user.role == "Solicitante": raise ApiError("Tu usuario no tiene permiso para exportar el tablero", 403)
+    if user.role == "Solicitante" and not user.custom_permissions: raise ApiError("Tu usuario no tiene permiso para exportar el tablero", 403)
     dashboard_orders(request, user)
     response = orders_xlsx(request)
     response["Content-Disposition"] = 'attachment; filename="reporte-tablero.xlsx"'
@@ -279,7 +336,7 @@ def alert_dict(alert):
 
 def operational_alerts_api(request):
     user = require(request, "orders.read")
-    if user.role == "Solicitante": raise ApiError("Tu usuario no tiene permiso para ver alertas", 403)
+    if user.role == "Solicitante" and not user.custom_permissions: raise ApiError("Tu usuario no tiene permiso para ver alertas", 403)
     sync_operational_alerts(user)
     qs = OperationalAlert.objects.filter(status__in=["Abierta", "Atendida"])
     if effective_areas(user):
@@ -300,7 +357,7 @@ def operational_alerts_api(request):
 
 def operational_alerts_xlsx(request):
     user = require(request, "orders.read")
-    if user.role == "Solicitante": raise ApiError("Tu usuario no tiene permiso para exportar alertas", 403)
+    if user.role == "Solicitante" and not user.custom_permissions: raise ApiError("Tu usuario no tiene permiso para exportar alertas", 403)
     sync_operational_alerts(user)
     rows = OperationalAlert.objects.filter(status__in=["Abierta", "Atendida"])
     if effective_areas(user):
@@ -397,6 +454,13 @@ def api(request, path):
 
 def dispatch(request, path):
     method = request.method
+    module = permission_module(path)
+    if module:
+        user = require(request)
+        if user.custom_permissions and module not in modules(user):
+            raise ApiError("Tu usuario no tiene acceso a esta ventana", 403)
+    if path == "/api/user-permission-options" and method == "GET":
+        return permission_options_api(request)
     if path == "/api/auth/login" and method == "POST":
         data = payload(request)
         user = authenticate(request, username=str(data.get("username", "")).strip(), password=str(data.get("password", "")))
@@ -1085,23 +1149,29 @@ def catalog_entry_api(request, pk):
     return JsonResponse({"ok": True, "active": item.active})
 
 
+@transaction.atomic
 def users_api(request):
     user = require(request, "users.manage")
     if request.method == "GET": return JsonResponse([public_user(x) | {"active": x.is_active, "created_at": iso(x.date_joined)} for x in User.objects.all()], safe=False)
+    if request.method != "POST": raise ApiError("Método no permitido", 405)
     data = payload(request); password = str(data.get("password", ""))
     if len(password) < 8: raise ApiError("La contraseña debe tener al menos 8 caracteres")
     created = User.objects.create_user(username=data.get("username") or data["employee_number"], password=password, employee_number=data["employee_number"], first_name=data["name"], last_name=data["last_name"], role=user_role(data.get("role", "Operador")), must_change_password=True)
-    audit(user, "user", created.id, "created", after={"role": created.role, "active": created.is_active, "actions": actions(created), "areas": created.area_permissions, "must_change_password": created.must_change_password}); return JsonResponse({"id": created.id, "username": created.username}, status=201)
+    configure_user_permissions(created, data)
+    created.save()
+    audit(user, "user", created.id, "created", after={"role": created.role, "active": created.is_active, "permissions": modules(created), "custom_permissions": created.custom_permissions, "actions": actions(created), "areas": effective_areas(created), "must_change_password": created.must_change_password}); return JsonResponse({"id": created.id, "username": created.username}, status=201)
 
 
+@transaction.atomic
 def user_api(request, pk):
+    if request.method != "PATCH": raise ApiError("Método no permitido", 405)
     actor = require(request, "users.manage"); target = get_object_or_404(User, pk=pk); data = payload(request)
-    before = {"role": target.role, "active": target.is_active, "actions": actions(target), "areas": target.area_permissions, "must_change_password": target.must_change_password}
+    before = {"role": target.role, "active": target.is_active, "permissions": modules(target), "custom_permissions": target.custom_permissions, "actions": actions(target), "areas": effective_areas(target), "must_change_password": target.must_change_password}
     password_reset = False
     if "active" in data and target.username != "administrator": target.is_active = bool(data["active"])
     if data.get("role") and target.role != "Administrador":
         new_role = user_role(data["role"])
-        if new_role != target.role:
+        if new_role != target.role and not data.get("custom_permissions", target.custom_permissions):
             target.module_permissions = []
             target.action_permissions = []
         target.role = new_role
@@ -1110,13 +1180,8 @@ def user_api(request, pk):
         target.set_password(data["password"])
         target.must_change_password = True
         password_reset = True
-    if isinstance(data.get("actions"), list): target.action_permissions = data["actions"]
-    if isinstance(data.get("areas"), list): target.area_permissions = data["areas"]
-    if target.role == "Jefe de mantenimiento":
-        target.module_permissions = []
-        target.action_permissions = []
-        target.area_permissions = []
-    target.save(); audit(actor, "user", target.id, "updated", before=before, after={"role": target.role, "active": target.is_active, "actions": actions(target), "areas": target.area_permissions, "must_change_password": target.must_change_password, "password_reset": password_reset}); return JsonResponse({"ok": True})
+    configure_user_permissions(target, data)
+    target.save(); audit(actor, "user", target.id, "updated", before=before, after={"role": target.role, "active": target.is_active, "permissions": modules(target), "custom_permissions": target.custom_permissions, "actions": actions(target), "areas": effective_areas(target), "must_change_password": target.must_change_password, "password_reset": password_reset}); return JsonResponse({"ok": True})
 
 
 def assets_xlsx(request):

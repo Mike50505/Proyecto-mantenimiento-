@@ -19,9 +19,17 @@ Al rotar `DJANGO_SECRET_KEY`, puedes pasar la clave anterior en `DJANGO_SECRET_K
 
 ## Roles de usuario
 
-En **Usuarios → Crear usuario** o **Administrar → Rol** se puede seleccionar **Jefe de mantenimiento**. Tiene acceso completo como el administrador: tablero, órdenes, activos, preventivos, inventario, catálogos, usuarios, importaciones y auditoría, con todas las acciones y áreas habilitadas. Puede crear usuarios, cambiar roles y restablecer contraseñas. Las cuentas nuevas deben cambiar su contraseña temporal antes de operar.
+En **Usuarios → Crear usuario** o **Administrar → Rol** se puede seleccionar **Jefe de mantenimiento**. Por defecto tiene acceso completo como el administrador: tablero, órdenes, activos, preventivos, inventario, catálogos, usuarios, importaciones y auditoría, con todas las acciones y áreas habilitadas. Puede crear usuarios, cambiar roles y restablecer contraseñas. Las cuentas nuevas deben cambiar su contraseña temporal antes de operar.
 
-Operador y Personal de mantenimiento conservan sus accesos actuales. El rol interno Jefatura conserva sus permisos previos. Al cambiar de rol se restablecen los permisos por módulo y acción; el acceso completo del jefe no se puede limitar con permisos personalizados.
+Operador y Personal de mantenimiento conservan sus accesos actuales. El rol interno Jefatura conserva sus permisos previos.
+
+En **Usuarios → Crear usuario** o **Administrar**, marca **Personalizar permisos de esta cuenta** para elegir **Ventanas visibles**, **Acciones permitidas** y **Áreas autorizadas** mediante casillas, sin escribir códigos ni listas separadas por comas. También se pueden limitar las cuentas con rol Jefe de mantenimiento. Solo el Administrador conserva siempre acceso completo.
+
+Al marcar una ventana se activa su acción de consulta. **Seleccionar todas** y **Quitar selección** facilitan la configuración. Una cuenta personalizada sin ventanas o acciones seleccionadas no recupera los permisos del rol: queda sin esos accesos. **Todas las áreas** conserva el alcance general; al desmarcarla es obligatorio elegir al menos un área.
+
+Desmarca la personalización para restaurar los accesos predeterminados del rol. Cambiar el rol de una cuenta personalizada conserva su selección. Las modificaciones quedan auditadas y las sesiones existentes actualizan los accesos periódicamente. El servidor rechaza acciones y URLs de ventanas no autorizadas. El rol mantiene las reglas operativas de propiedad de órdenes y participación de técnicos.
+
+La migración `0014_user_custom_permissions` agrega el modo personalizado sin cambiar las cuentas existentes. Los permisos anteriores se muestran seleccionados al editar. Verifica el selector con `node scripts/check-user-permissions.cjs`; las pruebas de servidor están en `maintenance/test_account_permissions.py`.
 
 ## Comprobaciones
 
