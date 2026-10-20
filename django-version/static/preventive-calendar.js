@@ -1,4 +1,4 @@
-const preventiveLabels = {P:'Planeado', T:'Ejecutado en plazo', D:'Ejecutado fuera de plazo', V:'Vencido', Cancelada:'Cancelada'};
+const preventiveLabels = {P:'Planeado', T:'Ejecutado en plazo', D:'Ejecutado fuera de plazo', V:'Vencido', Cancelada:'Cancelada', configuration_pending:'Por configurar'};
 
 async function openApplicabilityReview(planId) {
   const [plans,tasks] = await Promise.all([api('/api/preventives'),api(`/api/preventives/${planId}/tasks`)]);
@@ -70,7 +70,7 @@ function renderPreventiveMonth(rows, anchor) {
   const days=Array.from({length:42},(_,index)=>{
     const day=new Date(first);day.setDate(first.getDate()+index);
     const key=dayKey(day),items=itemsByDate.get(key)||[];
-    return `<div class="month-day ${day.getMonth()===month.getMonth()?'':'outside-month'} ${key===today?'today-cell':''} ${items.length?'has-preventive':''}"><span class="month-day-number">${day.getDate()}</span><div class="preventive-day-events">${items.map(({row,index:rowIndex})=>`<button type="button" class="month-event preventive-month-event ${row.status==='V'?'preventive-overdue':''}" data-calendar-open="${rowIndex}" title="${esc(`${row.asset_code} · ${row.task_title} · ${preventiveLabels[row.status]||row.status}${row.reprogrammed&&row.scheduled_at?' · Fecha vigente: '+fmtDate(row.scheduled_at):''}`)}"><b>${esc(row.asset_code)}</b><span>${esc(row.task_title)}</span><small>${esc(preventiveLabels[row.status]||row.status)}${row.reprogrammed?' · Reprogramado':''}</small></button>`).join('')}</div></div>`;
+    return `<div class="month-day ${day.getMonth()===month.getMonth()?'':'outside-month'} ${key===today?'today-cell':''} ${items.length?'has-preventive':''}"><span class="month-day-number">${day.getDate()}</span><div class="preventive-day-events">${items.map(({row,index:rowIndex})=>`<button type="button" class="month-event preventive-month-event ${row.status==='V'?'preventive-overdue':''}" data-calendar-open="${rowIndex}" title="${esc(`${row.asset_name||row.asset_code} · ${row.task_title} · ${preventiveLabels[row.status]||row.status}${row.reprogrammed&&row.scheduled_at?' · Fecha vigente: '+fmtDate(row.scheduled_at):''}`)}"><b>${esc(row.asset_name||row.asset_code)}</b><span>${esc(row.task_title)}</span><small>${esc(preventiveLabels[row.status]||row.status)}${row.reprogrammed?' · Reprogramado':''}</small></button>`).join('')}</div></div>`;
   });
   return `<div class="preventive-month-heading">${month.toLocaleDateString('es-MX',{month:'long',year:'numeric'})}</div><section class="month-calendar preventive-month-calendar" aria-label="Mantenimientos preventivos del mes"><div class="month-weekdays">${['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map(day=>`<span>${day}</span>`).join('')}</div><div class="month-grid">${days.join('')}</div></section>`;
 }
@@ -85,10 +85,13 @@ async function mountPreventiveCalendar() {
   const view = section.querySelector('[data-calendar-view]');
   const anchor = section.querySelector('[data-calendar-anchor]');
   const body = section.querySelector('[data-calendar-body]');
-  anchor.value = new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  anchor.value = state.preventiveCalendarAnchor || new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  view.value = state.preventiveCalendarView || 'monthly';
   const canGenerate = state.user?.role === 'Administrador' || (state.user?.actions?.includes('preventives.edit') && state.user?.actions?.includes('orders.create'));
   let rows = [];
   const load = async () => {
+    state.preventiveCalendarAnchor = anchor.value;
+    state.preventiveCalendarView = view.value;
     const range = preventiveRange(view.value, anchor.value);
     body.innerHTML = '<div class="empty">Cargando calendario…</div>';
     try {
@@ -97,7 +100,7 @@ async function mountPreventiveCalendar() {
       rows = data.occurrences;
       const coverage = data.coverage.assets_without_configured_plan;
       const incomplete = data.coverage.incomplete_plans;
-      const summary = `<div class="detail-summary"><div class="detail-box"><span>Período</span><strong>${fmtDate(range.from)} · ${fmtDate(range.to)}</strong></div><div class="detail-box"><span>Planeadas / vencidas</span><strong>${data.counts.P} / ${data.counts.V}</strong></div><div class="detail-box"><span>En plazo / fuera</span><strong>${data.counts.T} / ${data.counts.D}</strong></div></div>`;
+      const summary = `<div class="detail-summary"><div class="detail-box"><span>Período</span><strong>${fmtDate(range.from)} · ${fmtDate(range.to)}</strong></div><div class="detail-box"><span>Planeadas / vencidas</span><strong>${data.counts.P} / ${data.counts.V}</strong></div><div class="detail-box"><span>En plazo / fuera</span><strong>${data.counts.T} / ${data.counts.D}</strong></div><div class="detail-box"><span>Por configurar</span><strong>${rows.filter(row=>row.is_plan_schedule).length}</strong><small>Planes visibles; falta revisar sus tareas.</small></div></div>`;
       let content;
       if (view.value === 'monthly') {
         content=renderPreventiveMonth(rows,anchor.value);
@@ -105,7 +108,7 @@ async function mountPreventiveCalendar() {
         const assets = [...new Map(rows.map(row => [row.asset_id, {id:row.asset_id, code:row.asset_code, name:row.asset_name}])).values()];
         content = assets.length ? `<div class="table-wrap"><table><thead><tr><th>Activo</th>${Array.from({length:12}, (_,index)=>`<th>${new Date(Date.UTC(2026,index,1)).toLocaleDateString('es-MX',{month:'short',timeZone:'UTC'})}</th>`).join('')}</tr></thead><tbody>${assets.map(asset => `<tr><td>${esc(asset.code)}<div class="subtle">${esc(asset.name)}</div></td>${Array.from({length:12}, (_,month) => {const matches=rows.filter(row=>row.asset_id===asset.id && Number(row.base_date.slice(5,7))===month+1);return `<td><button type="button" class="order-action" data-calendar-month="${month+1}" aria-label="Ver ${matches.length} actividades de ${esc(asset.code)} en el mes ${month+1}">${matches.length ? `${matches.length} · ${[...new Set(matches.map(row=>row.status))].join('/')}` : '—'}</button></td>`}).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">No hay tareas configuradas para este año.</div>';
       } else {
-        content = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha base</th><th>Activo</th><th>Actividad</th><th>Estado</th><th>Fecha vigente</th><th>Orden</th></tr></thead><tbody>${rows.map((row,index) => `<tr><td>${fmtDate(row.base_date)}</td><td>${esc(row.asset_code)}<div class="subtle">${esc(row.asset_name)}</div></td><td>${esc(row.task_title)}<div class="subtle">${esc(row.plan_title)}</div></td><td>${badge(preventiveLabels[row.status]||row.status)}${row.reprogrammed ? ' · R' : ''}</td><td>${row.scheduled_at ? fmtDate(row.scheduled_at) : 'Sin OT'}</td><td>${row.work_order_id ? `<button class="order-action order-detail" data-id="${row.work_order_id}">${esc(row.folio)}</button>` : canGenerate ? `<button type="button" class="order-action" data-calendar-generate="${index}">Generar OT</button>` : 'Sin OT'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No hay tareas previstas en este período.</div>';
+        content = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha base</th><th>Activo</th><th>Actividad</th><th>Estado</th><th>Fecha vigente</th><th>Orden</th></tr></thead><tbody>${rows.map((row,index) => `<tr><td>${fmtDate(row.base_date)}</td><td>${esc(row.asset_code)}<div class="subtle">${esc(row.asset_name)}</div></td><td>${esc(row.task_title)}<div class="subtle">${esc(row.plan_title)}</div></td><td>${badge(preventiveLabels[row.status]||row.status)}${row.reprogrammed ? ' · R' : ''}</td><td>${row.scheduled_at ? fmtDate(row.scheduled_at) : 'Sin OT'}</td><td>${row.work_order_id ? `<button class="order-action order-detail" data-id="${row.work_order_id}">${esc(row.folio)}</button>` : row.is_plan_schedule ? `<button type="button" class="order-action" data-calendar-configure="${index}">Ver tareas del plan</button>` : canGenerate ? `<button type="button" class="order-action" data-calendar-generate="${index}">Generar OT</button>` : 'Sin OT'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No hay tareas previstas en este período.</div>';
       }
       body.innerHTML = summary + content + (coverage.length || incomplete.length ? `<details style="margin-top:16px"><summary>Configuración pendiente: ${coverage.length} activos, ${incomplete.length} planes por revisar</summary><div class="subtle">${coverage.map(asset => `${esc(asset.asset_code)} · ${esc(asset.asset_name)}`).join('<br>')}${coverage.length && incomplete.length ? '<br>' : ''}${incomplete.map(plan => `${esc(plan.asset_code)} · ${esc(plan.title)}: ${esc(plan.reason)}`).join('<br>')}</div></details>` : '');
     } catch (error) { body.innerHTML = `<div class="empty">${esc(error.message)}</div>`; }
@@ -124,6 +127,12 @@ async function mountPreventiveCalendar() {
     const month = event.target.closest('[data-calendar-month]');
     if (month) {anchor.value=`${anchor.value.slice(0,4)}-${String(month.dataset.calendarMonth).padStart(2,'0')}-01`;view.value='monthly';load();return;}
     const button = event.target.closest('[data-calendar-generate]');
+    const configure = event.target.closest('[data-calendar-configure]');
+    if(configure){
+      const row=rows[Number(configure.dataset.calendarConfigure)];
+      try{await openPreventiveTasks(row.plan_id)}catch(error){toast(error.message)}
+      return;
+    }
     if (!button) return;
     const row = rows[Number(button.dataset.calendarGenerate)];
     button.disabled = true;

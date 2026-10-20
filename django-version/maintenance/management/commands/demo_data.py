@@ -171,7 +171,7 @@ class Command(BaseCommand):
                 model="M-01", voltage="440 V", operating_hours=Decimal("1250"),
                 operational_status=status,
                 operational_status_cause=f"{PREFIX} vibración y revisión" if status == "Parada" else "",
-                operational_status_updated_at=now, administrative_status="Activo", critical=critical,
+                operational_status_updated_at=now, administrative_status="Activo", critical=critical, criticality="A" if critical else "C",
             ))
         items=[]
         for code,name,stock,minimum,maximum,cost in [

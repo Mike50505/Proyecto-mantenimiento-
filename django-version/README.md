@@ -19,6 +19,14 @@ Al rotar `DJANGO_SECRET_KEY`, puedes pasar la clave anterior en `DJANGO_SECRET_K
 
 ## Roles de usuario
 
+### Borrado y cambios de nómina
+
+Órdenes, usuarios, artículos de inventario y activos ofrecen **Borrar** cuando la cuenta tiene el permiso correspondiente: `orders.delete`, `users.delete`, `inventory.delete` o `assets.delete`, además del acceso a la ventana. Se pueden activar en **Usuarios → Administrar → Personalizar permisos → Acciones permitidas**. Administración y Jefe de mantenimiento sin restricciones los incluyen; los demás perfiles requieren que se activen explícitamente.
+
+El borrado exige motivo y conserva el registro y sus relaciones históricas. Se retira de las listas operativas y queda en **Auditoría → Registros borrados** con usuario, fecha, motivo y valores anteriores. No libera por sí mismo un paro ni revierte movimientos de inventario. Una OT pendiente se cancela al retirarla y sus ocurrencias preventivas quedan excluidas. Los códigos y nóminas borrados siguen reservados para conservar la trazabilidad.
+
+No se permite borrar la cuenta propia ni cuentas de administrador; las cuentas con órdenes asignadas pendientes o sesiones abiertas requieren resolverlas antes. Los activos con OT pendientes o paros abiertos y las OT con sesiones abiertas también deben resolverse primero. En **Usuarios → Administrar** se puede cambiar el número de nómina; exige `users.manage`, valida duplicados y conserva el cambio en auditoría.
+
 En **Usuarios → Crear usuario** o **Administrar → Rol** se puede seleccionar **Jefe de mantenimiento**. Por defecto tiene acceso completo como el administrador: tablero, órdenes, activos, preventivos, inventario, catálogos, usuarios, importaciones y auditoría, con todas las acciones y áreas habilitadas. Puede crear usuarios, cambiar roles y restablecer contraseñas. Las cuentas nuevas deben cambiar su contraseña temporal antes de operar.
 
 Operador y Personal de mantenimiento conservan sus accesos actuales. El rol interno Jefatura conserva sus permisos previos.
@@ -60,10 +68,28 @@ El alta de OT acepta una clave `Idempotency-Key`. Dos envíos concurrentes con l
 
 ## Catálogos
 
+La ficha de activos muestra nombre, tipo, ubicación, estado operativo, criticidad y observaciones. Marca, modelo, voltaje, serie y estado administrativo quedan en **Datos técnicos opcionales**. Ya no se capturan códigos, categoría histórica, alias, equivalencias, línea ni ubicación detallada; los valores anteriores se conservan en la base y los activos nuevos reciben un identificador automático para mantener sus relaciones.
+
+La criticidad usa **A: muy crítico**, **B: medianamente crítico** y **C: la producción puede seguir sin él**. La migración conserva el criterio anterior: Crítico pasa a A y Normal a C; B se asigna por revisión de planta. La lista, ficha y exportación XLSX usan esta clasificación, con cambios registrados en auditoría.
+
 Administración y Jefatura tienen la pantalla **Catálogos** para agregar y activar o desactivar prioridades, clasificaciones, especialidades, áreas, líneas y turnos. La desactivación impide usar el valor en capturas nuevas y conserva el texto de registros anteriores. La prioridad `Seguimiento` está disponible, pero su orden y significado requieren validación de planta. Áreas, líneas y turnos oficiales aún deben configurarse.
 La ficha de activo ya guarda línea y ubicación detallada. Los turnos aún no están vinculados a activos ni revisiones.
 
 ## Planificador preventivo
+
+### Flujo simple: OT futuras con repetición opcional
+
+**Borrar repetición completa** está disponible junto a la OT recurrente en Órdenes y Preventivos, y en **Repeticiones activas**. Requiere `orders.delete`, `preventives.edit` y acceso a ambas ventanas. Primero muestra cuántas OT se borrarán y permite elegir todas (incluidas terminadas/canceladas) o solo pendientes. Exige motivo y una confirmación vigente; si cambian las OT, se debe abrir de nuevo la confirmación. El borrado y la detención de futuras generaciones son atómicos. Se preservan registros y relaciones históricas, con auditoría individual por OT y resumen de la repetición. Las sesiones de trabajo abiertas bloquean todo el lote hasta resolverlas.
+
+En **Preventivos → Programar OT preventiva** se captura trabajo, activo, primera fecha/hora, responsable y repetición. **Una sola vez** crea una OT Programada; repetir por días, semanas, meses o años crea OT independientes en las fechas siguientes. Por ejemplo, el día 20 de cada mes conserva ese anclaje; cerrar una OT no mueve las próximas fechas. Cada orden aparece tanto en la agenda preventiva como en Órdenes y se atiende mediante el flujo habitual.
+
+Las series programan los próximos 90 días y el servicio `schedules` amplía esa agenda cada hora, también después de un reinicio, sin duplicar órdenes. Una primera fecha más lejana se guarda de inmediato. La fecha final de repetición es opcional. **Repeticiones activas → Detener repetición** deja de crear nuevas OT, conserva las ya programadas y registra el motivo en Auditoría. Cancelar o borrar una OT individual no detiene toda la repetición.
+
+El calendario y la lista de Preventivos muestran todas las fechas programadas. En la bandeja de Órdenes de trabajo se muestra solo la OT preventiva programada más próxima de cada repetición; al cerrarla, cancelarla o borrarla aparece la siguiente. Las OT en atención, las correctivas y el historial conservan su visibilidad. CSV y XLSX de la bandeja respetan este mismo filtro (`next_preventive=1`).
+
+La captura exige `preventives.edit`, `orders.create`, acceso a ambas ventanas y alcance de área; asignar responsable también requiere `orders.assign`. La generación automática respeta los permisos vigentes de quien programó la serie y pausa si su cuenta, permisos, responsable o activo dejan de estar disponibles. Las programaciones anteriores se conservan; las que no tienen tareas ni OT pueden convertirse desde **Programaciones anteriores → Programar como OT**.
+
+El planificador opcional descrito abajo conserva el flujo avanzado anterior; el flujo simple no necesita configurar tareas, plantillas ni aplicabilidad manualmente.
 
 El comando `plan_preventives` consulta fechas base de tareas con aplicabilidad Interna o Externa. Sin `--apply` solo muestra cuántas OT crearía. La ventana de búsqueda se indica explícitamente; por ejemplo:
 

@@ -3,6 +3,7 @@ import csv
 import hashlib
 import io
 import json
+import re
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -27,11 +28,11 @@ from .models import Asset, AssetCodeEquivalence, AuditLog, CatalogEntry, Checkli
 
 MODULES = ["dashboard", "orders", "assets", "preventives", "inventory", "catalogs", "users", "imports", "audit", "downtime"]
 ADMIN_ROLES = ("Administrador", "Jefe de mantenimiento")
-ACTIONS = ["orders.create", "orders.read", "orders.edit", "orders.edit_dates", "orders.assign", "orders.transition", "orders.validate", "orders.time", "assets.read", "assets.edit", "preventives.read", "preventives.edit", "inventory.read", "inventory.move", "inventory.adjust", "catalogs.manage", "users.manage", "audit.read"]
+ACTIONS = ["orders.create", "orders.read", "orders.edit", "orders.edit_dates", "orders.assign", "orders.transition", "orders.validate", "orders.time", "assets.read", "assets.edit", "preventives.read", "preventives.edit", "inventory.read", "inventory.move", "inventory.adjust", "catalogs.manage", "users.manage", "audit.read", "orders.delete", "users.delete", "inventory.delete", "assets.delete"]
 ROLE_MODULES = {"Administrador": MODULES, "Jefatura": [x for x in MODULES if x not in ("users", "imports")], "Técnico": [x for x in MODULES if x not in ("users", "imports", "catalogs", "audit")], "Solicitante": ["orders"]}
 ROLE_ACTIONS = {
     "Administrador": ACTIONS,
-    "Jefatura": [x for x in ACTIONS if x != "users.manage"],
+    "Jefatura": [x for x in ACTIONS if x != "users.manage" and not x.endswith(".delete")],
     "Técnico": ["orders.read", "orders.edit", "orders.transition", "orders.time", "assets.read", "preventives.read", "inventory.read"],
     "Solicitante": ["orders.create", "orders.read"],
 }
@@ -70,6 +71,8 @@ def parse_day(value, label="fecha"):
 
 def task_due(task, index):
     if index < 0: raise ApiError("Índice de ocurrencia inválido")
+    if task.plan.simple_schedule and not task.plan.schedule_repeat and index != 0:
+        raise ApiError("Esta OT preventiva está programada una sola vez", 409)
     if task.interval_unit == "days": return task.anchor_date + timedelta(days=task.interval_value * index)
     months = task.anchor_date.month - 1 + task.interval_value * index
     year, month = task.anchor_date.year + months // 12, months % 12 + 1
@@ -77,6 +80,10 @@ def task_due(task, index):
 
 
 def task_projection(task, start, end):
+    if task.plan.simple_schedule:
+        if not task.plan.schedule_repeat:
+            return [{"task_id":task.pk, "occurrence_index":0, "base_date":task.anchor_date.isoformat()}] if start <= task.anchor_date <= end else []
+        if task.plan.schedule_end: end = min(end, task.plan.schedule_end)
     rows = []
     for index in range(5000):
         due = task_due(task, index)
@@ -106,7 +113,7 @@ def order_labor_hours(order):
 
 
 def plan_snapshot(plan):
-    return {"id": plan.id, "asset_id": plan.asset_id, "title": plan.title, "frequency": plan.frequency, "next_date": iso(plan.next_date), "responsible_id": plan.responsible_id, "status": plan.status, "template_code": plan.template_code, "instructions": plan.instructions, "applies_when": plan.applies_when, "version": plan.version, "tasks": [{"id": x.id, "title": x.title, "interval_unit": x.interval_unit, "interval_value": x.interval_value, "anchor_date": x.anchor_date.isoformat(), "applicability_status": x.applicability_status, "applicability_reason": x.applicability_reason} for x in plan.tasks.all()]}
+    return {"id": plan.id, "asset_id": plan.asset_id, "title": plan.title, "frequency": plan.frequency, "next_date": iso(plan.next_date), "responsible_id": plan.responsible_id, "status": plan.status, "template_code": plan.template_code, "instructions": plan.instructions, "applies_when": plan.applies_when, "version": plan.version, "simple_schedule":plan.simple_schedule, "schedule_repeat":plan.schedule_repeat, "schedule_end":iso(plan.schedule_end), "schedule_time":iso(plan.schedule_time), "tasks": [{"id": x.id, "title": x.title, "interval_unit": x.interval_unit, "interval_value": x.interval_value, "anchor_date": x.anchor_date.isoformat(), "applicability_status": x.applicability_status, "applicability_reason": x.applicability_reason} for x in plan.tasks.all()]}
 
 
 def save_revision(plan, user, source, reason=""):
@@ -148,7 +155,7 @@ def actions(user):
 
 
 def require(request, action=None, area=None, allow_password_change=False):
-    if not request.user.is_authenticated or not request.user.is_active:
+    if not request.user.is_authenticated or not request.user.is_active or request.user.deleted_at:
         raise ApiError("Sesión requerida", 401)
     if request.user.must_change_password and not allow_password_change:
         raise ApiError("Debes cambiar tu contraseña temporal antes de continuar", 403)
@@ -220,7 +227,7 @@ def audit(user, entity, entity_id, action, before=None, after=None, reason=""):
 
 
 def asset_audit_snapshot(asset):
-    fields = ["code", "original_code", "alias_codes", "name", "category", "asset_type", "area", "line", "location_detail", "brand", "model", "voltage", "serial_code", "observations", "critical", "operational_status", "operational_status_cause", "administrative_status", "operating_hours"]
+    fields = ["code", "original_code", "alias_codes", "name", "category", "asset_type", "area", "line", "location_detail", "brand", "model", "voltage", "serial_code", "observations", "critical", "criticality", "operational_status", "operational_status_cause", "administrative_status", "operating_hours"]
     return {key: str(getattr(asset, key)) if isinstance(getattr(asset, key), Decimal) else getattr(asset, key) for key in fields}
 
 
@@ -250,7 +257,7 @@ def dashboard_api(request):
     sync_operational_alerts(user)
     open_qs = qs.exclude(status__in=["Completada", "Cancelada"])
     assets = Asset.objects.all()
-    plans = PreventivePlan.objects.all()
+    plans = PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").all()
     if effective_areas(user):
         assets = assets.filter(area__in=effective_areas(user))
         plans = plans.filter(asset__area__in=effective_areas(user))
@@ -292,7 +299,7 @@ def dashboard_xlsx(request):
 def sync_operational_alerts(user):
     sources = {}
     assets = Asset.objects.filter(operational_status="Parada")
-    plans = PreventivePlan.objects.filter(next_date__lte=timezone.localdate()).select_related("asset")
+    plans = PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").filter(next_date__lte=timezone.localdate()).select_related("asset")
     orders = order_queryset(user).exclude(status__in=["Completada", "Cancelada"]).filter(priority="Paro de mÃ¡quina").select_related("asset")
     if effective_areas(user):
         assets = assets.filter(area__in=effective_areas(user))
@@ -375,7 +382,7 @@ def operational_alerts_xlsx(request):
 
 
 def asset_dict(a):
-    return {"id": a.id, "code": a.code, "original_code": a.original_code, "alias_codes": a.alias_codes, "approved_codes": [x.code for x in a.code_equivalences.all() if x.status == "Aprobada"], "name": a.name, "category": a.category, "asset_type": a.asset_type, "area": a.area, "line": a.line, "location_detail": a.location_detail, "brand": a.brand, "model": a.model, "voltage": a.voltage, "serial_code": a.serial_code, "observations": a.observations, "operating_hours": float(a.operating_hours), "operational_status": a.operational_status, "operational_status_cause": a.operational_status_cause, "administrative_status": a.administrative_status, "critical": a.critical, "status": a.operational_status}
+    return {"id": a.id, "code": a.code, "original_code": a.original_code, "alias_codes": a.alias_codes, "approved_codes": [x.code for x in a.code_equivalences.all() if x.status == "Aprobada"], "name": a.name, "category": a.category, "asset_type": a.asset_type, "area": a.area, "line": a.line, "location_detail": a.location_detail, "brand": a.brand, "model": a.model, "voltage": a.voltage, "serial_code": a.serial_code, "observations": a.observations, "operating_hours": float(a.operating_hours), "operational_status": a.operational_status, "operational_status_cause": a.operational_status_cause, "administrative_status": a.administrative_status, "critical": a.critical, "criticality": a.criticality, "status": a.operational_status}
 
 
 def equivalence_dict(item):
@@ -396,6 +403,8 @@ def checked_asset_code(value, asset_id=None):
 def order_dict(o, detail=False, operator=False):
     row = {"id": o.id, "folio": o.folio, "requested_at": iso(o.requested_at), "requester_id": o.requester_id, "requester_name": o.requester.first_name, "requester_number": o.requester.employee_number, "priority": o.priority, "classification": o.classification, "specialty": o.specialty, "asset_id": o.asset_id, "asset": o.asset.name if o.asset else None, "asset_name": o.asset.name if o.asset else None, "asset_code": o.asset.code if o.asset else None, "location": o.location, "reported_failure": o.reported_failure, "technician_id": o.technician_id, "technician_name": o.technician.first_name if o.technician else None, "status": o.status, "validation_status": o.validation_status, "scheduled_at": iso(o.scheduled_at), "started_at": iso(o.started_at), "finished_at": iso(o.finished_at), "updated_at": iso(o.updated_at), "version": o.version}
     row.update({"actions": o.actions, "labor_hours": float(o.labor_hours)})
+    recurring = next((item.plan for item in o.preventive_occurrences.all() if item.plan.simple_schedule and item.plan.schedule_repeat), None)
+    row["recurrent_plan_id"] = recurring.pk if recurring else None
     if not operator:
         row.update({"material_cost": float(material_total(o.materials)), "closure_notes": o.closure_notes, "closure_document_code": o.closure_document_code, "closure_document_revision": o.closure_document_revision})
     if detail and operator: return row
@@ -459,6 +468,22 @@ def dispatch(request, path):
         user = require(request)
         if user.custom_permissions and module not in modules(user):
             raise ApiError("Tu usuario no tiene acceso a esta ventana", 403)
+    if method == "DELETE":
+        match = re.fullmatch(r"/api/(orders|users|inventory|assets)/(\d+)", path)
+        if not match: raise ApiError("Método no permitido", 405)
+        return delete_record_api(request, match.group(1), int(match.group(2)))
+    if path == "/api/preventive-orders":
+        from .preventive_orders import scheduled_orders_api
+        return scheduled_orders_api(request)
+    if path == "/api/preventive-orders/schedule":
+        from .preventive_orders import schedule_api
+        return schedule_api(request)
+    if re.fullmatch(r"/api/preventive-orders/\d+/stop", path):
+        from .preventive_orders import stop_schedule_api
+        return stop_schedule_api(request, int(path.split("/")[3]))
+    if re.fullmatch(r"/api/preventive-orders/\d+/delete-series", path):
+        from .preventive_orders import delete_series_api
+        return delete_series_api(request, int(path.split("/")[3]))
     if path == "/api/user-permission-options" and method == "GET":
         return permission_options_api(request)
     if path == "/api/auth/login" and method == "POST":
@@ -1163,10 +1188,78 @@ def users_api(request):
 
 
 @transaction.atomic
+def delete_record_api(request, kind, pk, *, deletion_data=None):
+    actor = require(request, f"{kind}.delete")
+    model, entity = {"orders": (WorkOrder, "work_order"), "users": (User, "user"),
+                     "inventory": (InventoryItem, "inventory_item"), "assets": (Asset, "asset")}[kind]
+    record = get_object_or_404(model.all_objects.select_for_update(), pk=pk)
+    if kind == "orders": require(request, None, record.asset.area if record.asset_id else record.location)
+    if kind == "orders" and actor.role == "Solicitante" and record.requester_id != actor.pk:
+        raise ApiError("Solo puedes borrar tus propias solicitudes", 403)
+    if kind == "assets": require(request, None, record.area)
+    if record.deleted_at: return JsonResponse({"ok": True, "deleted": True})
+    data = payload(request) if deletion_data is None else deletion_data
+    if not isinstance(data, dict): raise ApiError("Datos de borrado inválidos")
+    reason = data.get("reason")
+    if not isinstance(reason, str) or not reason.strip() or len(reason.strip()) > 2000:
+        raise ApiError("Indica el motivo del borrado (hasta 2000 caracteres)")
+    reason = reason.strip()
+    if kind in ("orders", "inventory"):
+        try: version = int(data.get("version", -1))
+        except (ValueError, TypeError): raise ApiError("Versión inválida")
+        if version != record.version: raise ApiError("El registro cambió en otra sesión", 409)
+    if kind == "users":
+        if record.pk == actor.pk: raise ApiError("No puedes borrar tu propia cuenta", 409)
+        if record.role == "Administrador" or record.is_superuser:
+            raise ApiError("La cuenta de administrador debe conservarse", 409)
+        if record.assigned_orders.exclude(status__in=["Completada", "Cancelada"]).exists() or record.participating_orders.exclude(status__in=["Completada", "Cancelada"]).exists() or TimeEntry.objects.filter(user=record, finished_at__isnull=True).exists():
+            raise ApiError("Reasigna las órdenes pendientes y termina las sesiones antes de borrar al usuario", 409)
+        before = public_user(record) | {"active": record.is_active}
+        record.is_active = False
+    elif kind == "assets":
+        if record.work_orders.exclude(status__in=["Completada", "Cancelada"]).exists() or record.downtime_events.filter(finished_at__isnull=True).exists():
+            raise ApiError("Cierra las órdenes pendientes y los paros antes de borrar el activo", 409)
+        before = asset_audit_snapshot(record)
+        record.administrative_status = "Borrado"
+    elif kind == "inventory":
+        before = {key: str(getattr(record, key)) for key in ["code", "name", "stock", "unit", "unit_cost", "active", "version"]}
+        record.active = False
+        record.version += 1
+    else:
+        if record.time_entries.filter(finished_at__isnull=True).exists():
+            raise ApiError("Termina las sesiones de trabajo antes de borrar la orden", 409)
+        before = order_dict(record, detail=True)
+        # The original state remains in the audit snapshot; outstanding occurrences are withdrawn.
+        if record.status not in ("Completada", "Cancelada"):
+            record.status = "Cancelada"
+            record.close_reason = reason
+            record.closed_at = timezone.now()
+            for occurrence in record.preventive_occurrences.all():
+                PreventiveExecutionEvent.objects.create(occurrence=occurrence, event="cancelled", user=actor, reason=reason)
+        record.version += 1
+        WorkOrderEvent.objects.create(work_order=record, user=actor, event="Borrada", details=reason)
+    record.deleted_at = timezone.now()
+    record.deleted_by = actor
+    record.deletion_reason = reason
+    record.save()
+    label = before.get("folio") or before.get("code") or before.get("username") or str(pk)
+    audit(actor, entity, pk, "deleted", before=before,
+          after={"deleted": True, "label": label, "deleted_at": iso(record.deleted_at), "deleted_by": actor.pk}, reason=reason)
+    return JsonResponse({"ok": True, "deleted": True})
+
+
+@transaction.atomic
 def user_api(request, pk):
     if request.method != "PATCH": raise ApiError("Método no permitido", 405)
-    actor = require(request, "users.manage"); target = get_object_or_404(User, pk=pk); data = payload(request)
-    before = {"role": target.role, "active": target.is_active, "permissions": modules(target), "custom_permissions": target.custom_permissions, "actions": actions(target), "areas": effective_areas(target), "must_change_password": target.must_change_password}
+    actor = require(request, "users.manage"); target = get_object_or_404(User.objects.select_for_update(), pk=pk); data = payload(request)
+    before = {"employee_number": target.employee_number, "role": target.role, "active": target.is_active, "permissions": modules(target), "custom_permissions": target.custom_permissions, "actions": actions(target), "areas": effective_areas(target), "must_change_password": target.must_change_password}
+    if "employee_number" in data:
+        employee_number = str(data["employee_number"]).strip() if isinstance(data["employee_number"], str) else ""
+        if not employee_number or len(employee_number) > 50:
+            raise ApiError("Indica un número de nómina de hasta 50 caracteres")
+        if User.all_objects.filter(employee_number=employee_number).exclude(pk=target.pk).exists():
+            raise ApiError("El número de nómina ya está registrado", 409)
+        target.employee_number = employee_number
     password_reset = False
     if "active" in data and target.username != "administrator": target.is_active = bool(data["active"])
     if data.get("role") and target.role != "Administrador":
@@ -1181,7 +1274,7 @@ def user_api(request, pk):
         target.must_change_password = True
         password_reset = True
     configure_user_permissions(target, data)
-    target.save(); audit(actor, "user", target.id, "updated", before=before, after={"role": target.role, "active": target.is_active, "permissions": modules(target), "custom_permissions": target.custom_permissions, "actions": actions(target), "areas": effective_areas(target), "must_change_password": target.must_change_password, "password_reset": password_reset}); return JsonResponse({"ok": True})
+    target.save(); audit(actor, "user", target.id, "updated", before=before, after={"employee_number": target.employee_number, "role": target.role, "active": target.is_active, "permissions": modules(target), "custom_permissions": target.custom_permissions, "actions": actions(target), "areas": effective_areas(target), "must_change_password": target.must_change_password, "password_reset": password_reset}); return JsonResponse({"ok": True})
 
 
 def assets_xlsx(request):
@@ -1192,26 +1285,46 @@ def assets_xlsx(request):
     query = request.GET.get("q", "").strip()
     if query:
         rows = rows.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(original_code__icontains=query) | Q(alias_codes__icontains=query) | Q(area__icontains=query) | Q(brand__icontains=query))
-    headers = ["Código", "Código de origen", "Alias", "Activo", "Tipo", "Marca", "Modelo", "Voltaje", "Serie", "Área", "Línea", "Ubicación", "Estado operativo", "Causa/observaciones", "Criticidad", "Horas operación", "Estado administrativo"]
-    data = [[a.code, a.original_code, a.alias_codes, a.name, a.asset_type or a.category, a.brand, a.model, a.voltage, a.serial_code, a.area, a.line, a.location_detail, a.operational_status, a.operational_status_cause or a.observations, "Crítico" if a.critical else "Normal", a.operating_hours, a.administrative_status] for a in rows]
-    content = make_workbook("Activos", headers, data, decimal_columns={16})
+    headers = ["Activo", "Tipo", "Ubicación", "Criticidad", "Estado operativo", "Marca", "Modelo", "Voltaje", "Serie", "Observaciones", "Estado administrativo"]
+    data = [[a.name, a.asset_type or a.category, a.area, a.criticality, a.operational_status, a.brand, a.model, a.voltage, a.serial_code, a.observations, a.administrative_status] for a in rows]
+    content = make_workbook("Activos", headers, data)
     response = HttpResponse(content, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = 'attachment; filename="activos-mantenimiento.xlsx"'
     return response
+
+
+def asset_criticality(data):
+    if "criticality" in data:
+        grade = data["criticality"]
+        if grade not in ("A", "B", "C"):
+            raise ApiError("Selecciona criticidad A, B o C")
+        return grade
+    # Existing integrations can continue sending the former boolean field.
+    return "A" if data.get("critical") in (True, 1, "1") else "C"
 
 
 def assets_api(request):
     user = require(request, "assets.read" if request.method == "GET" else "assets.edit")
     if request.method == "GET": return JsonResponse([asset_dict(a) for a in Asset.objects.prefetch_related("code_equivalences") if not effective_areas(user) or a.area in effective_areas(user)], safe=False)
     data = payload(request); require(request, "assets.edit", data.get("area") or "")
-    data["code"] = checked_asset_code(data.get("code"))
+    data.setdefault("category", data.get("asset_type") or "Maquinaria")
+    data.setdefault("asset_type", data.get("category") or "Maquinaria")
+    data["code"] = checked_asset_code(data.get("code") or "MESA-AUTO-" + uuid.uuid4().hex)
+    for field, label, limit in [("name", "Nombre", 250), ("area", "Ubicación", 120)]:
+        value = data.get(field)
+        if not isinstance(value, str) or not value.strip() or len(value.strip()) > limit:
+            raise ApiError(f"{label}: indica un valor de hasta {limit} caracteres")
+        data[field] = value.strip()
+    grade = asset_criticality(data)
     if catalog_values("area"): require_catalog_value("area", data.get("area"))
     if data.get("line") and catalog_values("line"): require_catalog_value("line", data["line"])
-    a = Asset.objects.create(**{k: data.get(k, "") for k in ["code", "name", "category", "asset_type", "area", "line", "location_detail", "brand", "model", "voltage", "serial_code", "observations", "original_code", "alias_codes"]}, critical=bool(data.get("critical")), operational_status=data.get("operational_status", "Sin información"), operational_status_updated_at=timezone.now(), administrative_status=data.get("administrative_status", "Activo")); audit(user, "asset", a.id, "created", after=asset_audit_snapshot(a)); return JsonResponse({"id": a.id}, status=201)
+    a = Asset.objects.create(**{k: data.get(k, "") for k in ["code", "name", "category", "asset_type", "area", "line", "location_detail", "brand", "model", "voltage", "serial_code", "observations", "original_code", "alias_codes"]}, critical=grade == "A", criticality=grade, operational_status=data.get("operational_status", "Sin información"), operational_status_updated_at=timezone.now(), administrative_status=data.get("administrative_status", "Activo")); audit(user, "asset", a.id, "created", after=asset_audit_snapshot(a)); return JsonResponse({"id": a.id}, status=201)
 
 
+@transaction.atomic
 def asset_api(request, pk):
-    a = get_object_or_404(Asset, pk=pk); user = require(request, "assets.read" if request.method == "GET" else "assets.edit", a.area)
+    assets = Asset.objects.all() if request.method == "GET" else Asset.objects.select_for_update()
+    a = get_object_or_404(assets, pk=pk); user = require(request, "assets.read" if request.method == "GET" else "assets.edit", a.area)
     if request.method == "GET":
         row = asset_dict(a)
         row["operational_status_updated_at"] = iso(a.operational_status_updated_at)
@@ -1228,6 +1341,12 @@ def asset_api(request, pk):
         return JsonResponse(row)
     data = payload(request)
     before = asset_audit_snapshot(a)
+    for field, label, limit in [("name", "Nombre", 250), ("area", "Ubicación", 120)]:
+        if field in data:
+            value = data[field]
+            if not isinstance(value, str) or not value.strip() or len(value.strip()) > limit:
+                raise ApiError(f"{label}: indica un valor de hasta {limit} caracteres")
+            data[field] = value.strip()
     if "code" in data: data["code"] = checked_asset_code(data["code"], a.id)
     if "area" in data:
         require(request, "assets.edit", data["area"])
@@ -1243,7 +1362,9 @@ def asset_api(request, pk):
     status_changed = new_status != a.operational_status or new_cause != a.operational_status_cause
     for key in ["code", "name", "category", "asset_type", "area", "line", "location_detail", "brand", "model", "voltage", "serial_code", "observations", "original_code", "alias_codes", "operational_status", "operational_status_cause", "administrative_status"]:
         if key in data: setattr(a, key, data[key])
-    if "critical" in data: a.critical = bool(data["critical"])
+    if "criticality" in data or "critical" in data:
+        a.criticality = asset_criticality(data)
+        a.critical = a.criticality == "A"
     if status_changed: a.operational_status_updated_at = timezone.now()
     a.save(); audit(user, "asset", a.id, "updated", before=before, after=asset_audit_snapshot(a)); return JsonResponse({"ok": True})
 
@@ -1357,8 +1478,9 @@ def inventory_bulk_create(request):
     return JsonResponse({"ok": True, "created": len(created), "ids": [item.id for item in created]}, status=201)
 
 
+@transaction.atomic
 def inventory_item_api(request, pk):
-    user = require(request, "inventory.move"); item = get_object_or_404(InventoryItem, pk=pk); data = payload(request)
+    user = require(request, "inventory.move"); item = get_object_or_404(InventoryItem.objects.select_for_update(), pk=pk); data = payload(request)
     before = {key: str(getattr(item, key)) for key in ["code", "name", "category", "unit", "location", "stock", "min_stock", "max_stock", "unit_cost", "active", "version"]}
     for key in ["code", "name", "category", "unit", "location"]:
         if key in data: setattr(item, key, data[key])
@@ -1428,7 +1550,7 @@ def inventory_xlsx(request):
 
 def preventives_xlsx(request):
     user = require(request, "preventives.read")
-    plans = PreventivePlan.objects.select_related("asset", "responsible", "work_order").order_by("next_date", "asset__code", "title")
+    plans = PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").select_related("asset", "responsible", "work_order").order_by("next_date", "asset__code", "title")
     if effective_areas(user):
         plans = plans.filter(asset__area__in=effective_areas(user))
     headers = ["Próxima fecha", "Código activo", "Activo", "Área", "Actividad", "Código plantilla", "Aplica cuando", "Frecuencia", "Responsable", "Estado", "Versión", "Folio OT"]
@@ -1531,7 +1653,7 @@ def movement_api(request, pk):
 
 
 def order_queryset(user):
-    qs = WorkOrder.objects.select_related("requester", "technician", "asset")
+    qs = WorkOrder.objects.select_related("requester", "technician", "asset").prefetch_related("preventive_occurrences__plan")
     if user.role == "Solicitante": return qs.filter(requester=user)
     if effective_areas(user): return qs.filter(Q(asset__area__in=effective_areas(user)) | Q(asset__isnull=True, location__in=effective_areas(user)))
     return qs
@@ -1539,6 +1661,11 @@ def order_queryset(user):
 
 def filtered_orders(request, user):
     qs = order_queryset(user)
+    if request.GET.get("next_preventive") == "1":
+        from .preventive_orders import nearest_scheduled_order_ids
+        nearest = nearest_scheduled_order_ids(user)
+        later = WorkOrder.objects.filter(preventive_occurrences__plan__simple_schedule=True, status="Programada").exclude(pk__in=nearest).values("pk")
+        qs = qs.exclude(pk__in=later)
     for key, field in [
         ("status", "status"), ("priority", "priority"), ("area", "asset__area"),
         ("technician_id", "technician_id"), ("asset_id", "asset_id"),
@@ -1575,7 +1702,7 @@ def orders_api(request):
         qs = filtered_orders(request, user).order_by("-requested_at")
         return JsonResponse([order_dict(o, operator=user.role == "Solicitante") for o in qs], safe=False)
     data = payload(request)
-    requester = user if user.role == "Solicitante" else get_object_or_404(User, pk=data.get("requester_id"))
+    requester = get_object_or_404(User.objects.select_for_update(), pk=user.pk if user.role == "Solicitante" else data.get("requester_id"))
     key = request.headers.get("Idempotency-Key") or data.get("idempotency_key")
     request_data = {name: value for name, value in data.items() if name != "idempotency_key"}
     request_hash = hashlib.sha256(json.dumps(request_data, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -1587,7 +1714,7 @@ def orders_api(request):
             raise ApiError("La clave de petición ya fue utilizada con otros datos", 409)
         return JsonResponse({"id": replay.id, "folio": replay.folio, "replayed": True})
     asset_id = data.get("asset_id") or None
-    asset = get_object_or_404(Asset, pk=asset_id) if asset_id else None
+    asset = get_object_or_404(Asset.objects.select_for_update(), pk=asset_id) if asset_id else None
     require(request, "orders.create", asset.area if asset else data.get("location") or "")
     if data.get("priority") == "Paro de máquina":
         if data.get("machine_stopped") not in ("yes", "no"):
@@ -1886,7 +2013,7 @@ def orders_xlsx(request):
     if user.role != "Solicitante":
         headers += ["Costo de materiales", "Notas de cierre"]
     rows = []
-    orders = filtered_orders(request, user).order_by("-requested_at").iterator()
+    orders = filtered_orders(request, user).order_by("-requested_at").iterator(chunk_size=200)
     for order in orders:
         requested = timezone.localtime(order.requested_at) if timezone.is_aware(order.requested_at) else order.requested_at
         scheduled = timezone.localtime(order.scheduled_at) if order.scheduled_at and timezone.is_aware(order.scheduled_at) else order.scheduled_at
@@ -2013,13 +2140,13 @@ def work_order_document_download_api(request, order_pk, document_pk):
 def preventives_api(request):
     user = require(request, "preventives.read" if request.method == "GET" else "preventives.edit")
     if request.method == "GET":
-        rows = PreventivePlan.objects.select_related("asset", "responsible")
+        rows = PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").select_related("asset", "responsible")
         return JsonResponse([{"id": p.id, "asset_id": p.asset_id, "asset_name": p.asset.name, "asset_code": p.asset.code, "asset_area": p.asset.area, "title": p.title, "frequency": p.frequency, "next_date": p.next_date.isoformat(), "responsible_id": p.responsible_id, "responsible_name": p.responsible.first_name if p.responsible else None, "status": p.status, "work_order_id": p.work_order_id, "version": p.version, "template_code": p.template_code, "instructions": p.instructions, "applies_when": p.applies_when} for p in rows if not effective_areas(user) or p.asset.area in effective_areas(user)], safe=False)
     data = payload(request); asset = get_object_or_404(Asset, pk=data["asset_id"]); require(request, "preventives.edit", asset.area); plan = PreventivePlan.objects.create(asset=asset, title=data["title"], frequency=data["frequency"], next_date=data["next_date"], responsible_id=data.get("responsible_id") or None, status=data.get("status", "Programado"), template_code=data.get("template_code", ""), instructions=data.get("instructions", ""), applies_when=data.get("applies_when", "")); save_revision(plan, user, "created"); audit(user, "preventive_plan", plan.id, "created"); return JsonResponse({"id": plan.id, "version": 1}, status=201)
 
 
 def plan_for(request, pk, action):
-    plan = get_object_or_404(PreventivePlan.objects.select_related("asset"), pk=pk); require(request, action, plan.asset.area); return plan
+    plan = get_object_or_404(PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").select_related("asset"), pk=pk); require(request, action, plan.asset.area); return plan
 
 
 @transaction.atomic
@@ -2038,7 +2165,7 @@ def tasks_api(request, pk):
 def task_applicability_api(request, plan_pk, task_pk):
     plan = plan_for(request, plan_pk, "preventives.edit")
     if request.method != "PATCH": raise ApiError("Método no permitido", 405)
-    plan = PreventivePlan.objects.select_for_update().get(pk=plan.pk)
+    plan = PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").select_for_update().get(pk=plan.pk)
     task = get_object_or_404(plan.tasks.select_for_update(), pk=task_pk)
     data = payload(request)
     if int(data.get("version", -1)) != plan.version: raise ApiError("El preventivo cambió en otra sesión", 409)
@@ -2075,14 +2202,18 @@ def revisions_api(request, pk):
 
 @transaction.atomic
 def make_occurrence(plan, task, index, user, shared_order=None, source="manual"):
-    PreventivePlan.objects.select_for_update().get(pk=plan.pk)
+    PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").select_for_update().get(pk=plan.pk)
     task = PreventiveTask.objects.get(pk=task.pk)
     existing = PreventiveOccurrence.objects.filter(task=task, occurrence_index=index).select_related("work_order").first()
     if existing: return existing, True
     if task.applicability_status not in ("Interna", "Externa"):
         raise ApiError("Valida la aplicabilidad de la tarea antes de generar su OT", 409)
     revision = plan.revisions.filter(version=plan.version).first() or save_revision(plan, user, "occurrence-baseline")
-    due = task_due(task, index); order = shared_order or WorkOrder.objects.create(folio=next_folio(), requested_at=timezone.now(), scheduled_at=scheduled_datetime(due), requester=user, priority="Media", classification="Mantenimiento Preventivo", asset=plan.asset, location=plan.asset.area, reported_failure=task.title, actions="", technician=plan.responsible, status="Programada")
+    due = task_due(task, index)
+    if plan.simple_schedule and plan.schedule_end and due > plan.schedule_end:
+        raise ApiError("La fecha está fuera del período de repetición", 409)
+    appointment = scheduled_datetime(datetime.combine(due, plan.schedule_time)) if plan.simple_schedule else scheduled_datetime(due)
+    order = shared_order or WorkOrder.objects.create(folio=next_folio(), requested_at=timezone.now(), scheduled_at=appointment, requester=user, priority="Media", classification="Mantenimiento Preventivo", asset=plan.asset, location=plan.asset.area, reported_failure=task.title, actions="", technician=plan.responsible, status="Programada")
     occurrence = PreventiveOccurrence.objects.create(plan=plan, task=task, occurrence_index=index, base_date=due, work_order=order, revision=revision, created_by=user)
     WorkOrderEvent.objects.create(work_order=order, user=user, event="OT preventiva generada", details=f"Origen: {source}; tarea #{task.id}; fecha base {due}")
     audit(user, "preventive_occurrence", occurrence.id, "created", after={"plan_id": plan.id, "task_id": task.id, "work_order_id": order.id, "base_date": due.isoformat(), "source": source})
@@ -2093,7 +2224,7 @@ def make_occurrence(plan, task, index, user, shared_order=None, source="manual")
 def occurrences_api(request, pk):
     plan = plan_for(request, pk, "preventives.read" if request.method == "GET" else "preventives.edit")
     if request.method == "GET": return JsonResponse([{"id": x.id, "task_id": x.task_id, "occurrence_index": x.occurrence_index, "base_date": x.base_date.isoformat(), "work_order_id": x.work_order_id, "folio": x.work_order.folio, "status": x.work_order.status, "order_status": x.work_order.status, "scheduled_at": iso(x.work_order.scheduled_at)} for x in plan.occurrences.select_related("work_order")], safe=False)
-    plan = PreventivePlan.objects.select_for_update().get(pk=plan.pk)
+    plan = PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").select_for_update().get(pk=plan.pk)
     require(request, "orders.create", plan.asset.area); data = payload(request)
     if int(data.get("version", -1)) != plan.version: raise ApiError("El preventivo cambió en otra sesión", 409)
     task = get_object_or_404(plan.tasks, pk=data.get("task_id")); occurrence, replay = make_occurrence(plan, task, int(data.get("occurrence_index")), request.user); return JsonResponse({"id": occurrence.id, "work_order_id": occurrence.work_order_id, "folio": occurrence.work_order.folio, "replayed": replay}, status=200 if replay else 201)
@@ -2102,7 +2233,7 @@ def occurrences_api(request, pk):
 @transaction.atomic
 def occurrence_group_api(request, pk):
     plan = plan_for(request, pk, "preventives.edit"); require(request, "orders.create", plan.asset.area); data = payload(request)
-    PreventivePlan.objects.select_for_update().get(pk=plan.pk)
+    PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").select_for_update().get(pk=plan.pk)
     if int(data.get("version", -1)) != plan.version: raise ApiError("El preventivo cambió en otra sesión", 409)
     requested = data.get("occurrences", [])
     if len(requested) < 2: raise ApiError("Selecciona al menos dos tareas")
@@ -2127,10 +2258,11 @@ def preventive_status_rows(plan, start, end, as_of):
     for task in plan.tasks.all():
         for projected in task_projection(task, start, end):
             occurrence = saved.get((task.id, projected["occurrence_index"]))
+            if plan.simple_schedule and (not occurrence or occurrence.work_order.deleted_at): continue
             if task.applicability_status not in ("Interna", "Externa") and not occurrence: continue
             events = list(occurrence.execution_events.order_by("recorded_at", "pk")) if occurrence else []
             executed = next((event for event in reversed(events) if event.event == "terminated"), None)
-            cancelled = any(event.event == "cancelled" for event in events)
+            cancelled = any(event.event in ("cancelled", "Cancelada") for event in events)
             reprogrammed = any(event.event == "rescheduled" for event in events)
             base_date = date.fromisoformat(projected["base_date"])
             executed_date = timezone.localdate(executed.recorded_at) if executed else None
@@ -2193,7 +2325,7 @@ def preventive_calendar_api(request):
     as_of = parse_day(request.GET.get("as_of") or timezone.localdate())
     if end < start or (end - start).days > 366:
         raise ApiError("El período es inválido o supera 366 días")
-    plans = PreventivePlan.objects.select_related("asset").prefetch_related("tasks", "occurrences__work_order", "occurrences__execution_events")
+    plans = PreventivePlan.objects.filter(asset__deleted_at__isnull=True).exclude(status="Borrado").select_related("asset").prefetch_related("tasks", "occurrences__work_order", "occurrences__execution_events")
     assets = Asset.objects.filter(administrative_status="Activo")
     if effective_areas(user):
         plans = plans.filter(asset__area__in=effective_areas(user))
@@ -2206,12 +2338,24 @@ def preventive_calendar_api(request):
         pending_tasks = [task for task in plan.tasks.all() if task.applicability_status == "Pendiente"]
         if not eligible_tasks or pending_tasks:
             incomplete.append({"plan_id": plan.id, "asset_id": plan.asset_id, "asset_code": plan.asset.code, "title": plan.title, "reason": "Sin tareas que apliquen al activo" if not eligible_tasks else f"{len(pending_tasks)} tareas pendientes de revisión"})
+        # A newly scheduled plan must be visible before its executable tasks are configured.
+        # These entries are informational: they do not count as task compliance or create OT.
+        if not eligible_tasks and (not plan.tasks.all() or pending_tasks) and not plan.occurrences.exists() and start <= plan.next_date <= end:
+            rows.append({
+                "id": None, "plan_id": plan.id, "task_id": None, "task_title": plan.title,
+                "occurrence_index": None, "base_date": plan.next_date.isoformat(),
+                "work_order_id": None, "folio": None, "order_status": None, "scheduled_at": None,
+                "status": "configuration_pending", "reason": "Falta configurar o revisar las tareas del plan",
+                "reprogrammed": False, "executed_date": None, "is_plan_schedule": True,
+                "asset_id": plan.asset_id, "asset_code": plan.asset.code, "asset_name": plan.asset.name,
+                "asset_area": plan.asset.area, "plan_title": plan.title, "plan_version": plan.version,
+            })
         if not eligible_tasks and not plan.occurrences.exists():
             continue
         if eligible_tasks: configured_asset_ids.add(plan.asset_id)
         for row in preventive_status_rows(plan, start, end, as_of):
             rows.append(row | {"asset_id": plan.asset_id, "asset_code": plan.asset.code, "asset_name": plan.asset.name, "asset_area": plan.asset.area, "plan_title": plan.title, "plan_version": plan.version})
-    rows.sort(key=lambda row: (row["base_date"], row["asset_code"], row["plan_id"], row["task_id"]))
+    rows.sort(key=lambda row: (row["base_date"], row["asset_code"], row["plan_id"], row["task_id"] or 0))
     uncovered = [{"asset_id": asset.id, "asset_code": asset.code, "asset_name": asset.name, "area": asset.area} for asset in assets.exclude(pk__in=configured_asset_ids).order_by("code")]
     counts = {key: sum(row["status"] == key for row in rows) for key in "PTDV"}
     counts["R"] = sum(row["reprogrammed"] for row in rows)
@@ -2305,7 +2449,8 @@ def templates_api(request):
 
 @transaction.atomic
 def meter_api(request, pk):
-    asset = get_object_or_404(Asset, pk=pk); user = require(request, "assets.read" if request.method == "GET" else "assets.edit", asset.area)
+    assets = Asset.objects.all() if request.method == "GET" else Asset.objects.select_for_update()
+    asset = get_object_or_404(assets, pk=pk); user = require(request, "assets.read" if request.method == "GET" else "assets.edit", asset.area)
     if request.method == "GET": return JsonResponse([{"id": x.id, "value": float(x.value), "notes": x.notes, "recorded_by": x.recorded_by_id, "recorded_at": iso(x.recorded_at)} for x in asset.meter_readings.order_by("-recorded_at")], safe=False)
     data = payload(request); value = decimal(data.get("value"), "lectura")
     if value < asset.operating_hours: raise ApiError("La lectura no puede ser menor que el horómetro actual")
@@ -2388,8 +2533,8 @@ def audit_queryset(request, user):
     rows = AuditLog.objects.select_related("user")
     if effective_areas(user):
         areas = effective_areas(user)
-        assets = Asset.objects.filter(area__in=areas).values("id")
-        orders = WorkOrder.objects.filter(Q(asset__area__in=areas) | Q(asset__isnull=True, location__in=areas)).values("id")
+        assets = Asset.all_objects.filter(area__in=areas).values("id")
+        orders = WorkOrder.all_objects.filter(Q(asset__area__in=areas) | Q(asset__isnull=True, location__in=areas)).values("id")
         plans = PreventivePlan.objects.filter(asset__area__in=areas).values("id")
         checklist_items = ChecklistItem.objects.filter(task__plan_id__in=plans).values("id")
         checklist_answers = ChecklistAnswer.objects.filter(occurrence__plan_id__in=plans).values("id")
@@ -2411,6 +2556,7 @@ def audit_queryset(request, user):
             | Q(entity_type="downtime", entity_id__in=downtime)
             | Q(entity_type="operational_alert", entity_id__in=alerts)
             | Q(entity_type__in=["inventory_item", "inventory_import"])
+            | (Q(entity_type="user") if "users.manage" in actions(user) else Q(pk__in=[]))
         )
     start = parse_day(request.GET["from"], "fecha inicial") if request.GET.get("from") else None
     end = parse_day(request.GET["to"], "fecha final") if request.GET.get("to") else None

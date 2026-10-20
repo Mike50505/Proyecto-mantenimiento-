@@ -1,5 +1,7 @@
 /* Heiliang's six comfortable palettes, shared by the other MESA applications. */
 @media screen {
+html[data-palette] { color-scheme: light; }
+html[data-palette="slate"], html[data-palette="night"] { color-scheme: dark; }
 html[data-palette="classic"] {
   --mesa-bg:#f0f5fc; --mesa-surface:#fff; --mesa-surface-soft:#f7f9fc;
   --mesa-text:#1d1d1f; --mesa-muted:#596577; --mesa-line:#dce3ed;

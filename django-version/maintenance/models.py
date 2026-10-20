@@ -1,8 +1,33 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 
 
-class User(AbstractUser):
+class LiveManager(models.Manager):
+    use_in_migrations = True
+
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
+class LiveUserManager(UserManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
+class DeletableRecord(models.Model):
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deleted_by = models.ForeignKey("maintenance.User", null=True, blank=True, on_delete=models.PROTECT, related_name="+")
+    deletion_reason = models.TextField(blank=True)
+    objects = LiveManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        abstract = True
+
+
+class User(AbstractUser, DeletableRecord):
+    objects = LiveUserManager()
+    all_objects = UserManager()
     ROLES = [(x, x) for x in ("Administrador", "Jefe de mantenimiento", "Jefatura", "Técnico", "Solicitante")]
     employee_number = models.CharField(max_length=50, unique=True)
     first_name = models.CharField(max_length=150)
@@ -32,7 +57,7 @@ class CatalogEntry(models.Model):
         ordering = ["kind", "sort_order", "value"]
 
 
-class Asset(models.Model):
+class Asset(DeletableRecord):
     code = models.CharField(max_length=80, unique=True)
     original_code = models.CharField(max_length=80, blank=True)
     alias_codes = models.TextField(blank=True)
@@ -53,6 +78,7 @@ class Asset(models.Model):
     operational_status_updated_at = models.DateTimeField(null=True, blank=True)
     administrative_status = models.CharField(max_length=40, default="Activo")
     critical = models.BooleanField(default=False)
+    criticality = models.CharField(max_length=1, choices=[("A", "Muy crítico"), ("B", "Medianamente crítico"), ("C", "La producción puede seguir sin él")], default="C")
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -84,7 +110,7 @@ class FolioSequence(models.Model):
     next_number = models.PositiveIntegerField(default=1)
 
 
-class WorkOrder(models.Model):
+class WorkOrder(DeletableRecord):
     folio = models.CharField(max_length=40, unique=True)
     original_folio = models.CharField(max_length=80, blank=True)
     requested_at = models.DateTimeField()
@@ -159,7 +185,7 @@ class TimeEntry(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
-class InventoryItem(models.Model):
+class InventoryItem(DeletableRecord):
     code = models.CharField(max_length=80, unique=True)
     name = models.CharField(max_length=250)
     category = models.CharField(max_length=120)
@@ -214,7 +240,17 @@ class PreventivePlan(models.Model):
     template_code = models.CharField(max_length=80, blank=True)
     instructions = models.TextField(blank=True)
     applies_when = models.TextField(blank=True)
+    simple_schedule = models.BooleanField(default=False)
+    schedule_repeat = models.BooleanField(default=False)
+    schedule_time = models.TimeField(null=True, blank=True)
+    schedule_end = models.DateField(null=True, blank=True)
+    schedule_user = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    schedule_key = models.CharField(max_length=120, null=True, blank=True)
+    schedule_hash = models.CharField(max_length=64, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["schedule_user", "schedule_key"], name="unique_preventive_schedule_request")]
 
 
 class PreventiveTask(models.Model):

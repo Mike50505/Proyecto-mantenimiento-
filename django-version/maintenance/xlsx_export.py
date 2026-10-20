@@ -93,7 +93,7 @@ def make_workbook(sheet_name, headers, rows, date_columns=(), decimal_columns=()
             cell = SubElement(row, _tag(MAIN, "c"), {"r": f"{_column_name(index)}{row_number}"})
             if header:
                 cell.set("s", "1")
-            elif index in date_columns and isinstance(value, (datetime, date)):
+            if index in date_columns and isinstance(value, (datetime, date)):
                 cell.set("s", "2"); SubElement(cell, _tag(MAIN, "v")).text = str(_excel_date(value))
             elif index in decimal_columns and isinstance(value, (int, float, Decimal)):
                 cell.set("s", "3"); SubElement(cell, _tag(MAIN, "v")).text = str(value)

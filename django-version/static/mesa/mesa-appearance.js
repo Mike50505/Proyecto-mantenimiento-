@@ -11,6 +11,13 @@
     night:{theme:'dark',label:'Oscuro · negro',copy:'El modo oscuro original de MESA.'},
   };
   const store = {get(key){try{return localStorage.getItem(key)}catch{return null}},set(key,value){try{localStorage.setItem(key,value)}catch{}}};
+  const preference = matchMedia('(prefers-color-scheme: dark)');
+  const read = () => {
+    const saved = store.get('heiliang-color-mode');
+    if (Object.hasOwn(modes,saved)) return saved;
+    const previous = store.get('mesa-theme') || store.get('mesa-empaque-theme');
+    return previous === 'dark' || (!previous && preference.matches) ? 'night' : 'classic';
+  };
   const pick = () => Object.hasOwn(modes,root.dataset.palette) ? root.dataset.palette : 'classic';
   const panels = new Set();
   let syncing = false;
@@ -21,6 +28,7 @@
     if (persist) {store.set('heiliang-color-mode',key);store.set('mesa-theme',modes[key].theme)}
     syncing = true;
     for (const panel of panels) {
+      if (!panel.isConnected) { panels.delete(panel); continue; }
       const select = panel.querySelector('select');
       if (select && select.value !== key) {select.value=key;select.dispatchEvent(new Event('change',{bubbles:true}))}
       panel.querySelector('[data-palette-copy]').textContent = modes[key].copy;
@@ -53,7 +61,8 @@
   const scan=()=>document.querySelectorAll('[data-mesa-palette]:not([data-palette-mounted])').forEach(host=>mount(host,++sequence));
   scan();
   new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});
-  addEventListener('storage',event=>{if(['heiliang-color-mode','mesa-theme',null].includes(event.key)){const saved=store.get('heiliang-color-mode');apply(Object.hasOwn(modes,saved)?saved:(store.get('mesa-theme')==='dark'?'night':'classic'),false)}});
+  addEventListener('storage',event=>{if(['heiliang-color-mode','mesa-theme','mesa-empaque-theme',null].includes(event.key))apply(read(),false)});
+  preference.addEventListener('change',()=>{if(!store.get('heiliang-color-mode')&&!store.get('mesa-theme')&&!store.get('mesa-empaque-theme'))apply(read(),false)});
   apply(pick(),false);
   window.MesaAppearance={apply};
 })();
