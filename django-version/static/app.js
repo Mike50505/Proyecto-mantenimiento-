@@ -525,7 +525,9 @@ async function openOrder(assetId=null){const requestKey=makeRequestKey();const c
   <div class="field"><label for="new-order-location">Ubicación de atención</label><select id="new-order-location" name="location"><option value="">Seleccionar área…</option>${['Almacén y embarque','EHYS seguridad','RH','EMPAQUE','Máquinas healing integradoras','Máquinas tradicionales','Infrestructura'].map(area=>`<option value="${esc(area)}">${esc(area)}</option>`).join('')}</select></div>
   ${operator?'':`<div class="field"><label>Especialidad</label><select name="specialty"><option value="">Por definir</option>${c.specialties.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div>`}
   <div class="field full"><label>Falla o necesidad reportada</label><textarea name="reported_failure" required placeholder="Describe claramente el requerimiento"></textarea></div>
-  ${operator?'':`<div class="field"><label>Técnico asignado</label><select name="technician_id"><option value="">Sin asignar</option>${options(c.users.filter(x=>['Técnico','Jefatura','Jefe de mantenimiento'].includes(x.role)))}</select></div>`}`,d=>api('/api/orders',{method:'POST',headers:{'Idempotency-Key':requestKey},body:JSON.stringify(d)}).then(result=>{if(operator)setTimeout(()=>toast(`Reporte ${result.folio} enviado a Mantenimiento`),100)}));
+  ${MesaOrderImages.field('report_image','Imagen de la falla reportada')}
+  ${operator?'':`<div class="field"><label>Técnico asignado</label><select name="technician_id"><option value="">Sin asignar</option>${options(c.users.filter(x=>['Técnico','Jefatura','Jefe de mantenimiento'].includes(x.role)))}</select></div>`}`,d=>api('/api/orders',{method:'POST',headers:{'Idempotency-Key':requestKey},body:MesaOrderImages.body(d)}).then(result=>{if(operator)setTimeout(()=>toast(`Reporte ${result.folio} enviado a Mantenimiento`),100)}));
+  MesaOrderImages.bind(wrap);
   const priority=$('[name="priority"]',wrap),confirmation=$('[data-downtime-confirm]',wrap),answer=$('[name="machine_stopped"]',wrap),causeField=$('[data-downtime-cause]',wrap),cause=$('[name="downtime_cause"]',wrap);
   const toggle=()=>{const critical=priority.value==='Paro de máquina';confirmation.hidden=!critical;answer.disabled=!critical;const stopped=critical&&answer.value==='yes';causeField.hidden=!stopped;cause.disabled=!stopped;cause.required=stopped};
   priority.addEventListener('change',toggle);answer.addEventListener('change',toggle);toggle();}
@@ -541,7 +543,7 @@ function preventiveExecutionPanel(o){
 async function openOrderDetail(id){
   const [o,c,inventory]=await Promise.all([api(`/api/orders/${id}`),catalogs(),state.user.role==='Solicitante'?Promise.resolve([]):api('/api/inventory').catch(()=>[])]);
   if(state.user.role==='Solicitante'){
-    readModal(`${o.folio} · Estado del reporte`,`<div class="detail-summary"><div class="detail-box"><span>Estado actual</span><strong>${badge(o.status)}</strong></div><div class="detail-box"><span>Prioridad</span><strong>${esc(o.priority)}</strong></div><div class="detail-box"><span>Fecha de solicitud</span><strong>${fmtDate(o.requested_at)}</strong></div></div><div class="field"><label>Activo o área</label><div class="detail-box"><strong>${esc(o.asset_name||'Sin activo asociado')}</strong><small>${esc(o.asset_code||'')}</small></div></div><div class="field" style="margin-top:14px"><label>Falla reportada</label><div class="detail-box">${esc(o.reported_failure)}</div></div><div class="field" style="margin-top:14px"><label>Atención de mantenimiento</label><div class="detail-box"><strong>${esc(o.technician_name||'Pendiente de asignación')}</strong><small>${o.actions?esc(o.actions):'Mantenimiento todavía no ha registrado acciones.'}</small></div></div>${o.finished_at?`<div class="field" style="margin-top:14px"><label>Terminación</label><div class="detail-box">${fmtDate(o.finished_at)} · ${o.labor_hours||0} horas hombre</div></div>`:''}`);return;
+    readModal(`${o.folio} · Estado del reporte`,`<div class="detail-summary"><div class="detail-box"><span>Estado actual</span><strong>${badge(o.status)}</strong></div><div class="detail-box"><span>Prioridad</span><strong>${esc(o.priority)}</strong></div><div class="detail-box"><span>Fecha de solicitud</span><strong>${fmtDate(o.requested_at)}</strong></div></div><div class="field"><label>Activo o área</label><div class="detail-box"><strong>${esc(o.asset_name||'Sin activo asociado')}</strong><small>${esc(o.asset_code||'')}</small></div></div><div class="field" style="margin-top:14px"><label>Falla reportada</label><div class="detail-box">${esc(o.reported_failure)}</div></div><div class="field" style="margin-top:14px"><label>Atención de mantenimiento</label><div class="detail-box"><strong>${esc(o.technician_name||'Pendiente de asignación')}</strong><small>${o.actions?esc(o.actions):'Mantenimiento todavía no ha registrado acciones.'}</small></div></div>${MesaOrderImages.gallery(o.images)}${o.finished_at?`<div class="field" style="margin-top:14px"><label>Terminación</label><div class="detail-box">${fmtDate(o.finished_at)} · ${o.labor_hours||0} horas hombre</div></div>`:''}`);return;
   }
   const dt=value=>{if(!value)return '';const parsed=new Date(value);return Number.isNaN(parsed.getTime())?String(value).slice(0,16):new Date(parsed.getTime()-parsed.getTimezoneOffset()*60000).toISOString().slice(0,16)};
   const selected=(value,current)=>value==current?'selected':'';
@@ -563,11 +565,12 @@ async function openOrderDetail(id){
       const primary=ids.includes(o.technician_id)?o.technician_id:(ids[0]||null);
       data.technician_id=primary;data.participant_ids=ids.filter(id=>id!==primary);
     }
-    const saved=await api(`/api/orders/${id}`,{method:'PATCH',body:JSON.stringify({...data,version:currentVersion})});
+    const saved=await api(`/api/orders/${id}`,{method:'PATCH',body:MesaOrderImages.body({...data,version:currentVersion})});
     currentVersion=saved.version;
     return saved;
   };
   const wrap=modal(`${o.folio} · Atención de orden`,`
+    ${MesaOrderImages.gallery(o.images)}
     <div class="field full order-overview"><div class="detail-summary"><div class="detail-box"><span>Solicitante</span><strong>${esc(o.requester_name)}</strong><small>Nómina ${esc(o.requester_number)}</small></div><div class="detail-box"><span>Solicitud</span><strong>${fmtDate(o.requested_at)}</strong><small>${esc(o.priority)}</small></div><div class="detail-box"><span>Activo</span><strong>${esc(o.asset_name||'Sin activo')}</strong><small>${esc(o.asset_code||'')}</small></div></div></div>
     <section class="field full order-attention" aria-labelledby="order-attention-title">
       <div class="section-title"><div><span class="section-kicker">Operación</span><h3 id="order-attention-title">Atención de la orden</h3></div><div>${badge(o.status)}</div></div>
@@ -587,6 +590,7 @@ async function openOrderDetail(id){
     <div class="field"><label>Especialidad</label><select name="specialty"><option value="">Por definir</option>${(o.specialty&&!c.specialties.includes(o.specialty)?[o.specialty,...c.specialties]:c.specialties).map(x=>`<option ${selected(x,o.specialty)}>${esc(x)}</option>`).join('')}</select></div>
     <div class="field full"><label>Falla reportada</label><textarea name="reported_failure">${esc(o.reported_failure)}</textarea></div>
     <div class="field full"><label>Acciones realizadas / despiece</label><textarea name="actions" placeholder="Diagnóstico, reparación y pruebas realizadas">${esc(o.actions||'')}</textarea></div>
+    ${o.status==='En proceso'&&state.user.actions?.includes('orders.edit')&&['Técnico','Jefatura','Jefe de mantenimiento','Administrador'].includes(state.user.role)&&(state.user.role!=='Técnico'||o.technician_id===state.user.id)?MesaOrderImages.field('completion_image','Imagen del trabajo terminado'):''}
     <div class="field"><label>Fecha y hora de inicio</label><input type="datetime-local" value="${dt(o.started_at)}" disabled></div>
     <div class="field"><label>Fecha y hora de término</label><input type="datetime-local" value="${dt(o.finished_at)}" disabled></div>
     <div class="field"><label>Horas hombre</label><input type="number" value="${o.labor_hours||0}" disabled></div>
@@ -594,6 +598,7 @@ async function openOrderDetail(id){
     <div class="field full"><div class="toolbar"><a class="btn btn-secondary" href="/print.html?id=${o.id}" target="_blank">Vista de impresión del formato</a>${state.user.actions?.includes('orders.edit')&&(state.user.role!=='Técnico'||o.technician_id===state.user.id)?`<button type="button" class="btn btn-primary generate-order-pdf">Crear PDF versionado</button>`:''}<button type="button" class="btn btn-secondary order-pdf-history">Historial de PDF</button></div></div>
     <div class="field full"><details class="detail-box order-history"><summary>Historial de la orden (${o.events.length})</summary><div class="timeline">${o.events.length?o.events.map(e=>`<div class="timeline-item"><b>${esc(e.event)}</b><small>${esc(e.user_name||'Sistema')} · ${fmtDate(e.created_at.replace(' ','T'))}</small>${e.details?`<small>${esc(e.details)}</small>`:''}</div>`).join(''):'<div class="subtle">El historial comenzará con la próxima actualización.</div>'}</div></details></div>`,
     d=>saveOrderChanges(d),async()=>{await render();await openOrderDetail(id)});
+  MesaOrderImages.bind(wrap);
   const overview=wrap.querySelector('.order-overview');
   const requestPanel=document.createElement('section');
   requestPanel.className='field full request-origin';

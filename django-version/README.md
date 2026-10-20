@@ -58,6 +58,16 @@ docker compose exec web python manage.py check --deploy
 
 ## Atención de OT y paros
 
+### Imágenes del reporte y del trabajo terminado
+
+Al levantar una OT, el operador puede adjuntar una imagen opcional de la falla. El técnico responsable puede adjuntar una imagen del trabajo terminado al guardar la atención con la orden **En proceso**, antes de enviarla a validación. Administración y Jefatura con permiso de edición también pueden adjuntar la evidencia. Las imágenes se consultan en el detalle de la orden, tanto por el solicitante como por Mantenimiento, respetando los permisos de lectura y área existentes.
+
+Se aceptan JPG, PNG y WebP de hasta 8 MB y 25 megapíxeles. El servidor verifica el contenido, corrige la orientación, elimina metadatos EXIF y reduce la imagen a un máximo de 1600 píxeles por lado. Compara JPEG optimizado con WebP y guarda el resultado más pequeño. La compresión adaptativa busca 300 KB: primero ajusta calidad y, si hace falta, reduce el lado mayor a 1280 o 1024 píxeles. No agranda imágenes pequeñas ni sigue degradando la evidencia para forzar ese tamaño; algunas imágenes pueden superar el objetivo. El resultado nunca pesa más que la compresión JPEG anterior.
+
+Las imágenes se guardan en la base de datos, dentro de la misma transacción de la orden: el respaldo PostgreSQL incluye las evidencias y no requiere una carpeta de archivos adicional. No tienen una URL pública; cada descarga comprueba la sesión y el acceso a la orden. La migración `0019_work_order_image_format` conserva el formato JPEG de las imágenes anteriores, sin recomprimirlas ni cambiar sus huellas de auditoría.
+
+Las evidencias anteriores se conservan y cada imagen registra autor y fecha. Reenviar la misma imagen no la duplica; se permite un máximo de diez imágenes por etapa. No se cambian órdenes ni estados anteriores, y el adjunto no es obligatorio para crear o terminar una OT. La migración `0018_work_order_images` agrega únicamente la tabla de evidencias. Verifica el servidor con `python manage.py test maintenance.test_order_images` y el formulario con `node scripts/check-order-images.cjs`.
+
 En el detalle de una OT, Jefatura asigna el técnico responsable y colaboradores. Con la OT **En proceso**, cada participante puede iniciar, pausar y terminar su sesión; también existe captura manual de un intervalo completo. La pausa exige motivo y no suma tiempo. Jefatura o Administración pueden corregir un intervalo cerrado con motivo; el cambio queda auditado. No se puede dejar **En proceso** con sesiones abiertas al pausar, esperar material, terminar trabajo o cancelar.
 
 La prioridad **Paro de máquina** pide confirmar si el activo está realmente detenido. Al confirmarlo se abre un evento de paro o se vincula la OT a uno activo del mismo equipo. Cerrar o cancelar una OT no libera por sí solo la máquina: el paro se cierra por separado con motivo. La pantalla de Paros permite vincular varias OT al mismo evento.

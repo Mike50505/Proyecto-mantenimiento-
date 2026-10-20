@@ -1,0 +1,12 @@
+.order-image-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px}
+.order-image-gallery figure{margin:0;min-width:0;border:1px solid var(--border,#d2d2d7);border-radius:12px;overflow:hidden}
+.order-image-gallery figure>a{display:block}
+.order-image-gallery img{display:block;width:100%;height:210px;object-fit:contain;background:var(--bg-secondary,transparent)}
+.order-image-gallery figcaption{display:grid;gap:6px;padding:12px}
+.order-image-gallery figcaption small{overflow-wrap:anywhere}
+.order-image-preview img{display:block;max-width:100%;max-height:240px;width:auto;height:auto;border-radius:10px;margin-bottom:10px}
+.order-image-field input[type=file]{max-width:100%;padding:10px;min-height:44px}
+.order-image-error{color:var(--danger,#b42318);margin:0}
+.order-image-evidence h3{margin:0 0 12px}
+.order-image-evidence a:focus-visible,.order-image-field button:focus-visible{outline:3px solid var(--primary,#0071e3);outline-offset:3px}
+.order-image-preview[hidden],.order-image-error[hidden]{display:none}

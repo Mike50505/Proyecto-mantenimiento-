@@ -15,6 +15,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.http import Http404
+from django.http.multipartparser import MultiPartParser, MultiPartParserError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.middleware.csrf import get_token
@@ -23,6 +24,8 @@ from .workbook_preview import CODE_COLUMNS, preview_workbook
 from .import_mapping import map_source_row
 from .xlsx_export import make_workbook
 from .pdf_documents import render_work_order_pdf, work_order_snapshot
+from .order_images import ImageUploadError, prepare_image
+from .models import WorkOrderImage
 
 from .models import Asset, AssetCodeEquivalence, AuditLog, CatalogEntry, ChecklistAnswer, ChecklistItem, DowntimeEvent, FolioSequence, ImportBatch, ImportRow, InventoryItem, InventoryMovement, MaintenanceMaterial, MeterReading, OperationalAlert, PreventiveExecutionEvent, PreventiveOccurrence, PreventivePlan, PreventivePlanRevision, PreventiveTask, PreventiveTemplate, TimeEntry, User, WorkOrder, WorkOrderDocument, WorkOrderEvent
 
@@ -54,9 +57,51 @@ class ApiError(Exception):
 
 def payload(request):
     try:
-        return json.loads(request.body or b"{}")
-    except json.JSONDecodeError:
+        if request.content_type == 'multipart/form-data':
+            if request.method != 'POST' and not getattr(request, '_order_multipart_loaded', False):
+                request._post, request._files = MultiPartParser(
+                    request.META, request, request.upload_handlers, request.encoding).parse()
+                request._order_multipart_loaded = True
+            data = json.loads(request.POST.get('data', '{}'))
+        else:
+            data = json.loads(request.body or b"{}")
+        if not isinstance(data, dict):
+            raise ApiError('Envía los datos de la orden como un objeto JSON.')
+        return data
+    except (json.JSONDecodeError, UnicodeDecodeError, MultiPartParserError):
         raise ApiError("JSON inválido")
+
+
+def order_image_upload(request, field):
+    if set(request.FILES) - {field}:
+        raise ApiError('El adjunto no corresponde a esta etapa de la orden.')
+    uploads = request.FILES.getlist(field)
+    if len(uploads) > 1:
+        raise ApiError('Selecciona una sola imagen por envío.')
+    if not uploads:
+        return None
+    try:
+        return prepare_image(uploads[0])
+    except ImageUploadError as exc:
+        raise ApiError(str(exc)) from None
+
+
+def save_order_image(order, user, kind, prepared):
+    if not prepared:
+        return
+    existing = WorkOrderImage.objects.filter(work_order=order, kind=kind, sha256=prepared.sha256).first()
+    if existing:
+        return existing
+    if order.images.filter(kind=kind).count() >= 10:
+        raise ApiError('Esta orden ya tiene diez imágenes en esta etapa. Se conservan las evidencias anteriores.', 409)
+    image = WorkOrderImage.objects.create(work_order=order, kind=kind, created_by=user,
+        image_content=prepared.content, content_type=prepared.content_type,
+        sha256=prepared.sha256, width=prepared.width, height=prepared.height)
+    label = 'Imagen de la falla reportada' if kind == 'report' else 'Evidencia del trabajo terminado'
+    WorkOrderEvent.objects.create(work_order=order, user=user, event=label, details=f'Imagen #{image.pk}')
+    audit(user, 'work_order_image', image.pk, 'attached',
+          after={'work_order_id': order.pk, 'kind': kind, 'sha256': image.sha256})
+    return image
 
 
 def iso(value):
@@ -407,6 +452,12 @@ def order_dict(o, detail=False, operator=False):
     row["recurrent_plan_id"] = recurring.pk if recurring else None
     if not operator:
         row.update({"material_cost": float(material_total(o.materials)), "closure_notes": o.closure_notes, "closure_document_code": o.closure_document_code, "closure_document_revision": o.closure_document_revision})
+    if detail:
+        row['images'] = [{'id': image.pk, 'kind': image.kind,
+            'url': f'/api/orders/{o.pk}/images/{image.pk}',
+            'created_at': iso(image.created_at), 'created_by': image.created_by.first_name,
+            'width': image.width, 'height': image.height}
+            for image in o.images.select_related('created_by').defer('image_content')]
     if detail and operator: return row
     if detail:
         row["participants"] = [{"id": person.id, "name": person.first_name} for person in o.participants.all()]
@@ -556,6 +607,9 @@ def dispatch(request, path):
     if path == "/api/orders": return orders_api(request)
     if path == "/api/orders/export.csv": return orders_csv(request)
     if path == "/api/orders/export.xlsx": return orders_xlsx(request)
+    image_route = re.fullmatch(r'/api/orders/(\d+)/images/(\d+)', path)
+    if image_route:
+        return order_image_api(request, int(image_route[1]), int(image_route[2]))
     if path.startswith("/api/orders/") and "/documents/" in path:
         parts = path.split("/")
         return work_order_document_download_api(request, int(parts[3]), int(parts[5]))
@@ -1702,9 +1756,12 @@ def orders_api(request):
         qs = filtered_orders(request, user).order_by("-requested_at")
         return JsonResponse([order_dict(o, operator=user.role == "Solicitante") for o in qs], safe=False)
     data = payload(request)
+    report_image = order_image_upload(request, 'report_image')
     requester = get_object_or_404(User.objects.select_for_update(), pk=user.pk if user.role == "Solicitante" else data.get("requester_id"))
     key = request.headers.get("Idempotency-Key") or data.get("idempotency_key")
     request_data = {name: value for name, value in data.items() if name != "idempotency_key"}
+    if report_image:
+        request_data['report_image_sha256'] = report_image.sha256
     request_hash = hashlib.sha256(json.dumps(request_data, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
     if key:
         requester = User.objects.select_for_update().get(pk=requester.pk)
@@ -1749,6 +1806,7 @@ def orders_api(request):
         autonomous_checklist=data.get("autonomous_checklist", ""),
     )
     WorkOrderEvent.objects.create(work_order=order, user=user, event="Creada")
+    save_order_image(order, user, 'report', report_image)
     if data.get("priority") == "Paro de máquina" and data["machine_stopped"] == "yes":
         asset = Asset.objects.select_for_update().get(pk=asset.pk)
         downtime = DowntimeEvent.objects.filter(asset=asset, finished_at__isnull=True).order_by("-started_at").first()
@@ -1771,6 +1829,11 @@ def order_api(request, pk):
     if request.method == "GET": return JsonResponse(order_dict(order, True, user.role == "Solicitante"))
     if user.role == "Técnico" and order.technician_id != user.id: raise ApiError("Solo puedes editar órdenes asignadas a ti", 403)
     data = payload(request)
+    completion_image = order_image_upload(request, 'completion_image')
+    if completion_image and user.role not in ('Técnico', 'Jefatura', 'Jefe de mantenimiento', 'Administrador'):
+        raise ApiError('Solo Mantenimiento puede adjuntar evidencia del trabajo terminado.', 403)
+    if completion_image and order.status != 'En proceso':
+        raise ApiError('La evidencia del trabajo terminado se adjunta mientras la orden está En proceso, antes de enviarla a validación.', 409)
     if int(data.get("version", -1)) != order.version: raise ApiError("La orden cambió en otra sesión", 409)
     before = order_dict(order)
     before["participant_ids"] = list(order.participants.values_list("id", flat=True))
@@ -1828,9 +1891,25 @@ def order_api(request, pk):
     if work_dates_changed or ((technician_changed or participant_changed) and not order.time_entries.exists()):
         order.labor_hours = order_labor_hours(order)
         order.save(update_fields=["labor_hours", "updated_at"])
+    save_order_image(order, user, 'completion', completion_image)
     after = order_dict(order)
     after["participant_ids"] = list(order.participants.values_list("id", flat=True))
     WorkOrderEvent.objects.create(work_order=order, user=user, event="Actualizada", details=data.get("date_change_reason", "")); audit(user, "work_order", order.id, "updated", before, after, data.get("date_change_reason", "")); return JsonResponse({"ok": True, "version": order.version})
+
+
+def order_image_api(request, order_pk, image_pk):
+    if request.method not in ('GET', 'HEAD'):
+        raise ApiError('Método no permitido', 405)
+    user = require(request, 'orders.read')
+    order = get_object_or_404(order_queryset(user), pk=order_pk)
+    image = get_object_or_404(WorkOrderImage, pk=image_pk, work_order=order)
+    content_type = image.content_type if image.content_type in ('image/jpeg', 'image/webp') else 'image/jpeg'
+    extension = 'webp' if content_type == 'image/webp' else 'jpg'
+    response = HttpResponse(bytes(image.image_content), content_type=content_type)
+    response['Content-Disposition'] = f'inline; filename="ot-{order.pk}-{image.kind}-{image.pk}.{extension}"'
+    response['Cache-Control'] = 'private, no-store'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 def time_target(user, order, data):

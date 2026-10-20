@@ -151,6 +151,22 @@ class WorkOrder(DeletableRecord):
         indexes = [models.Index(fields=["status", "requested_at"]), models.Index(fields=["asset", "status"])]
 
 
+class WorkOrderImage(models.Model):
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, related_name="images")
+    kind = models.CharField(max_length=12, choices=[("report", "Falla reportada"), ("completion", "Trabajo terminado")])
+    image_content = models.BinaryField()
+    content_type = models.CharField(max_length=30, default='image/jpeg', editable=False)
+    sha256 = models.CharField(max_length=64)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="work_order_images")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        constraints = [models.UniqueConstraint(fields=["work_order", "kind", "sha256"], name="unique_order_image_content")]
+
+
 class WorkOrderEvent(models.Model):
     work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name="events")
     user = models.ForeignKey(User, on_delete=models.PROTECT, null=True)
